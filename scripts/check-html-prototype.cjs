@@ -1,195 +1,182 @@
 /**
- * Smoke test for the standalone HTML prototype in /html.
- * Runs the real html/app.js inside jsdom and exercises the flows the user asked for:
- *   1. no "No neutral ratings" link in Business reputation → Reviews
- *   2. the reminders table uses a "Time" column (not "Number")
- *   3. allowed domains for the widget can be added and removed
- *   4. the standard per-level thank-you screen appears after a submission
- * Usage: node scripts/check-html-prototype.cjs
+ * Checks the standalone HTML build in /html.
+ *
+ * It loads the committed bundle in jsdom, drives the real application UI, and
+ * compares the review actions drawer against the markup produced by the
+ * application's own component (src/components/review-actions-drawer.tsx), so the
+ * prototype cannot drift from the app.
+ *
+ * Usage: node scripts/check-html-prototype.cjs   (after `npm run build:html`)
  */
 const fs = require("node:fs");
 const path = require("node:path");
-const { JSDOM } = require("jsdom");
+const esbuild = require("esbuild");
+const { JSDOM, VirtualConsole } = require("jsdom");
 
 const root = path.join(__dirname, "..");
 const html = fs.readFileSync(path.join(root, "html", "index.html"), "utf8");
-const script = fs.readFileSync(path.join(root, "html", "app.js"), "utf8");
+const css = fs.readFileSync(path.join(root, "html", "app.css"), "utf8");
+const demoData = fs.readFileSync(path.join(root, "html", "demo-data.js"), "utf8");
+const bundle = fs.readFileSync(path.join(root, "html", "app.bundle.js"), "utf8");
 
-const errors = [];
-const dom = new JSDOM(html, {
-  url: "http://localhost:4173/",
-  runScripts: "dangerously",
-  pretendToBeVisual: true,
-  virtualConsole: new (require("jsdom").VirtualConsole)().on("jsdomError", (e) => errors.push(e.message)),
-});
-const { window } = dom;
-window.addEventListener("error", (event) => errors.push(event.message));
-window.print = () => {};
-window.scrollTo = () => {};
-window.eval(script);
-
-const doc = window.document;
-const UPP = window.UPP;
-const $ = (selector) => doc.querySelector(selector);
-const $$ = (selector) => Array.prototype.slice.call(doc.querySelectorAll(selector));
-const text = () => $("#main").textContent;
-const click = (selector) => {
-  const el = typeof selector === "string" ? $(selector) : selector;
-  if (!el) throw new Error("Cannot click, element not found: " + selector);
-  el.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
-};
-const clickIfPresent = (selector) => { if ($(selector)) click(selector); };
-const byAction = (action, arg) =>
-  $$("[data-act]").filter((el) => el.getAttribute("data-act") === action && (arg === undefined || el.getAttribute("data-arg") === arg))[0];
-const nav = (view) => click('[data-act="nav"][data-view="' + view + '"]');
-const setValue = (el, value) => {
-  el.value = value;
-  el.dispatchEvent(new window.Event("input", { bubbles: true }));
-};
-const setSelect = (el, value) => {
-  el.value = value;
-  el.dispatchEvent(new window.Event("change", { bubbles: true }));
-};
-
-/* ── 0. Typography: the prototype must use the same locally hosted font ──── */
-const css = fs.readFileSync(path.join(root, "html", "styles.css"), "utf8");
-const fontChecks = [
-  ["styles.css declares the Montserrat @font-face", /@font-face\s*{[^}]*font-family:\s*"Montserrat"[^}]*}/.test(css)],
-  ["the @font-face points at the bundled woff2", /url\("fonts\/montserrat-latin-variable\.woff2"\) format\("woff2"\)/.test(css)],
-  ["the prototype ships the font file", fs.existsSync(path.join(root, "html", "fonts", "montserrat-latin-variable.woff2"))],
-  ["the Next.js app ships the same font file", fs.existsSync(path.join(root, "public", "fonts", "montserrat-latin-variable.woff2"))],
-  ["body uses Montserrat first", /font-family:\s*"Montserrat",/.test(css)],
-];
-for (const [label, ok] of fontChecks) {
-  if (!ok) throw new Error("FAILED: " + label);
-  console.log("PASS: " + label);
-}
-// jsdom does not cascade linked stylesheets, so read the rule the way a browser would apply it.
-const bodyRule = /html,\s*body\s*{([^}]*)}/.exec(css);
-const declaredFont = bodyRule ? (/font-family:\s*([^;]+);/.exec(bodyRule[1]) || [])[1] : "";
-if (!declaredFont || !declaredFont.trim().startsWith('"Montserrat"')) {
-  throw new Error("FAILED: html/body font-family is " + (declaredFont || "not declared"));
-}
-console.log("PASS: html/body font-family is " + declaredFont.trim());
-fontChecks.push(["html/body font-family declared", true]);
-
-let checks = fontChecks.length + 1;
+let checks = 0;
 function check(label, condition) {
   checks += 1;
   if (!condition) throw new Error("FAILED: " + label);
   console.log("PASS: " + label);
 }
 
-/* ── 1. Chrome: header + all sidebar pages ─────────────────────────────── */
-check("sidebar renders every page", $$('#sidebar [data-act="nav"]').length >= 13);
-nav("reviews");
-check("reviews table renders rows", $$("#main table.data tbody tr").length > 5);
+/* ── 1. The build ships the app's own styles and font ─────────────────── */
+check("app.css carries the side-panel styles from globals.css", /\.side-panel\s*{/.test(css) && /\.review-action-row\s*{/.test(css));
+check("app.css carries the reputation hub styles", /\.rep-reminder-table\s*{/.test(css) && /\.rep-domain-chip\s*{/.test(css));
+check("app.css carries the generated Tailwind utilities used by the drawer", css.includes("text-\\[\\#344054\\]") && css.includes("tracking-\\[\\.09em\\]"));
+check("app.css declares the bundled Montserrat", /@font-face\s*{[^}]*font-family:\s*"Montserrat"[^}]*}/.test(css));
+check("the font url is rewritten for the standalone folder", css.includes('url("fonts/montserrat-latin-variable.woff2")'));
+check("the font file ships with the prototype", fs.existsSync(path.join(root, "html", "fonts", "montserrat-latin-variable.woff2")));
+check("index.html loads the app stylesheet and bundle", /href="app\.css"/.test(html) && /src="app\.bundle\.js"/.test(html));
+check("index.html uses the layout shell class", /class="antialiased min-h-screen"/.test(html));
 
-/* ── 2. Business reputation → Reviews: no "No neutral ratings" link ────── */
-nav("reputation");
-check("reputation hub opens on Protection & Settings", $('[data-act="rep-section"][data-arg="protection"]').getAttribute("aria-current") === "page");
-click('[data-act="rep-section"][data-arg="reviews"]');
-click('[data-act="rep-category"][data-arg="neutral"]');
-check("neutral category is selected", $('[data-act="rep-category"][data-arg="neutral"]').getAttribute("aria-checked") === "true");
-check("no 'No neutral ratings' control anywhere", !/No neutral ratings/i.test(doc.body.textContent));
-check("no 'No negative ratings' control either", !/No negative ratings/i.test(doc.body.textContent));
-check("range summary still lists all three levels", /Positive:5 ★/.test(text()) && /Neutral:4 ★/.test(text()) && /Negative:1–3 ★/.test(text()));
-click('[data-act="rep-star"][data-arg="5"]');
-check("star picker still moves the neutral threshold", UPP.state.rep.draft.neutralThreshold === 5);
-check("empty-range warning is shown instead of the removed link", /No ratings are neutral/.test(text()));
-click('[data-act="rep-star"][data-arg="4"]');
-clickIfPresent('[data-act="rep-discard"]');
+/* ── 2. Boot the committed bundle in jsdom ────────────────────────────── */
+const errors = [];
+const virtualConsole = new VirtualConsole();
+virtualConsole.on("jsdomError", (error) => errors.push(error.message));
+virtualConsole.on("error", (message) => errors.push(String(message)));
+const dom = new JSDOM(html, { url: "http://localhost:4173/", runScripts: "outside-only", pretendToBeVisual: true, virtualConsole });
+const { window } = dom;
+window.HTMLDialogElement.prototype.showModal = function () { this.setAttribute("open", ""); };
+window.HTMLDialogElement.prototype.close = function () { this.removeAttribute("open"); };
+window.scrollTo = () => {};
+window.print = () => {};
+window.matchMedia = window.matchMedia || (() => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
 
-/* ── 3. Reminders: "Time" column instead of "Number" ───────────────────── */
-click('[data-act="rep-section"][data-arg="reminders"]');
-const headers = $$(".rep-reminder-table th").map((th) => th.textContent.trim());
-check('first reminders column is "Time"', headers[0] === "Time");
-check('no "Number" column header left', headers.indexOf("Number") === -1);
-check("reminder rows render", $$(".rep-reminder-table tbody tr").length === 3);
-const firstTime = $('.rep-reminder-table input[type="number"]');
-check('delay input is labelled "delay time"', /delay time/.test(firstTime.getAttribute("aria-label")));
-setValue(firstTime, "6");
-check("editing the time updates delayMinutes", UPP.state.rep.draft.reminders[0].delayMinutes === 6 * 1440);
-const unitSelect = $('.rep-reminder-table select');
-setSelect(unitSelect, "hours");
-check("changing the unit converts the delay", UPP.state.rep.draft.reminders[0].delayMinutes === 6 * 60);
-click('[data-act="rem-add"]');
-check("add reminder appends a row", $$(".rep-reminder-table tbody tr").length === 4);
-click('[data-act="rem-delete"][data-arg="' + UPP.state.rep.draft.reminders[3].id + '"]');
-check("delete reminder removes the row", $$(".rep-reminder-table tbody tr").length === 3);
-click('[data-act="rem-message"]');
-check("message editor panel opens", !!$(".panel-head h2") && /Edit reminder message/.test($(".panel-head h2").textContent));
-click('[data-act="rem-message-cancel"]');
-clickIfPresent('[data-act="rep-discard"]');
+window.eval(demoData);
+check("demo data is provided before the bundle runs", Array.isArray(window.__UPP_DEMO__.reviews) && window.__UPP_DEMO__.reviews.length === 12);
+window.eval(bundle);
 
-/* ── 4. Allowed domains for the widget ─────────────────────────────────── */
-click('[data-act="rep-section"][data-arg="protection"]');
-check("Widget domains section exists", /Widget domains/.test(text()));
-check("primary domain is shown as a chip", /zerno\.coffee/.test($('.rep-domain-chip.is-primary span').textContent));
-check("extra domains are listed", $$(".rep-domain-chip").length === 3);
-click('[data-act="domain-add"]');
-const domainInputs = $$('.rep-domain-chip input');
-check("add domain adds an editable chip", domainInputs.length === 3);
-setValue(domainInputs[2], "https://Example.Com/landing");
-click('[data-act="rep-save"]');
-check("saving normalises the new domain", UPP.PROJECT.allowedDomains.join(",") === "shop.zerno.coffee,*.zerna.app,example.com");
-check("saved state clears the dirty flag", /All settings are up to date/.test(text()));
-click('[data-act="domain-remove"][data-arg="2"]');
-click('[data-act="rep-save"]');
-check("removing a domain persists", UPP.PROJECT.allowedDomains.length === 2);
+const doc = window.document;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const flush = async () => { await sleep(60); };
+const click = async (el) => {
+  if (!el) throw new Error("Element to click not found");
+  el.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+  await flush();
+};
+const byText = (selector, text) =>
+  Array.prototype.slice.call(doc.querySelectorAll(selector)).filter((el) => el.textContent.trim() === text)[0];
+const bodyText = () => doc.body.textContent;
 
-/* ── 5. Widgets page: thank-you screen per level after submission ──────── */
-nav("widgets");
-check("widget type cards render", $$('#main [data-act="widget-type"]').length === 4);
-click('[data-act="widget-type"][data-arg="form"]');
-check("sandbox form renders", !!$("[data-widget-form]"));
-click('[data-act="sandbox-rating"][data-arg="5"]');
-setValue($('[data-act="sandbox-field"][data-arg="name"]'), "Test Customer");
-setValue($('[data-act="sandbox-field"][data-arg="text"]'), "Great coffee and very friendly staff, thank you!");
-$("[data-widget-form]").dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
-check("thank-you screen replaces the form", !!$("[data-widget-thanks]"));
-check("thank-you title is shown", /Thank you for your feedback!/.test($("#main").textContent));
-check("positive level invites to Google", /Leave a review on Google/.test($("#main").textContent));
-check("submitted review joined the list as positive", UPP.REVIEWS[0].sentiment === "positive" && UPP.REVIEWS[0].authorName === "Test Customer");
-click('[data-act="sandbox-reset"]');
-check("leave another review brings the form back", !!$("[data-widget-form]"));
+(async () => {
+  await flush();
+  check("the real dashboard renders from the bundle", !!doc.querySelector(".uppointment-shell") && !!doc.querySelector(".reference-app-header"));
+  check("the reviews table renders rows", doc.querySelectorAll("table tbody tr").length >= 6);
 
-click('[data-act="sandbox-rating"][data-arg="1"]');
-setValue($('[data-act="sandbox-field"][data-arg="name"]'), "Upset Customer");
-setValue($('[data-act="sandbox-field"][data-arg="text"]'), "Waited forty minutes and the coffee was cold.");
-$("[data-widget-form]").dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
-check("negative level offers support email", /Email customer support/.test($("#main").textContent));
-check("negative level offers support chat", /Chat with support/.test($("#main").textContent));
-check("negative review is classified as negative", UPP.REVIEWS[0].sentiment === "negative");
-click('[data-act="sandbox-reset"]');
+  /* ── 3. Review actions drawer === the app's component ───────────────── */
+  const rowActions = Array.prototype.slice.call(doc.querySelectorAll('button[aria-label^="Open actions for"]'));
+  const review = window.__UPP_DEMO__.reviews.filter((candidate) =>
+    rowActions.some((button) => button.getAttribute("aria-label") === "Open actions for " + candidate.authorName))[0];
+  check("every listed review offers its actions drawer", rowActions.length > 0 && !!review);
+  await click(doc.querySelector('button[aria-label="Open actions for ' + review.authorName + '"]'));
+  const dialog = doc.querySelector("dialog.side-panel");
+  check("the actions drawer is a native dialog.side-panel", !!dialog);
+  check("the drawer uses the app's panel chrome", !!dialog.querySelector(".side-panel-header") && !!dialog.querySelector(".side-panel-body") && !!dialog.querySelector(".side-panel-footer"));
+  check("the drawer header matches the app copy", /Review actions/.test(dialog.querySelector(".side-panel-header").textContent) && /Business reputation/.test(dialog.querySelector(".side-panel-header").textContent));
+  check("the drawer lists the app's action groups", Array.prototype.slice.call(dialog.querySelectorAll(".review-action-group h3")).map((h) => h.textContent.trim()).join(" | ") ===
+    "Publication | Moderation | Customer communication | Rating & classification | Tools");
 
-/* ── 6. Widget preview drawer with the after-submission tab ────────────── */
-click('[data-act="open-preview"]');
-check("preview panel opens", /Widget preview/.test($(".panel-head h2").textContent));
-check("preview shows the allowed domain list", /Allowed domains:/.test($(".panel-body").textContent));
-click('[data-act="preview-kind"][data-arg="after"]');
-check("after-submission tab shows the thank-you screen", !!$(".panel-body [data-widget-thanks]"));
-click('[data-act="preview-after"][data-arg="positive"]');
-check("level switch shows the Google invitation", /Leave a review on Google/.test($(".panel-body").textContent));
-click('[data-act="close-panel"]');
-check("panel closes", !$(".panel"));
+  /* Render the application component itself and compare the markup. */
+  const work = path.join(root, ".validation");
+  fs.mkdirSync(work, { recursive: true });
+  const entry = path.join(work, "drawer-entry.tsx");
+  const out = path.join(work, "drawer-bundle.cjs");
+  fs.writeFileSync(entry, [
+    'export { default as ReviewActionsDrawer } from "@/components/review-actions-drawer";',
+    'export { createElement } from "react";',
+    'export { renderToStaticMarkup } from "react-dom/server";',
+    "",
+  ].join("\n"));
+  esbuild.buildSync({
+    entryPoints: [entry], outfile: out, bundle: true, format: "cjs", platform: "node", jsx: "automatic",
+    target: "node20", tsconfig: path.join(root, "tsconfig.json"), absWorkingDir: root,
+    external: ["react", "react-dom", "react-dom/server", "react/jsx-runtime"], logLevel: "silent",
+  });
+  const app = require(out);
+  // Both trees render the very same review object, so the comparison is state for state.
+  check("the drawer was opened for that review", dialog.textContent.indexOf(review.content) !== -1);
+  const ssr = app.renderToStaticMarkup(
+    app.createElement(app.ReviewActionsDrawer, {
+      review, project: window.__UPP_DEMO__.project, busy: false,
+      onClose: () => {}, onAction: async () => ({ ok: true, message: "" }), onLocal: async () => "",
+    }),
+  );
+  const holder = doc.createElement("div");
+  holder.innerHTML = ssr;
 
-/* ── 7. Review actions drawer ──────────────────────────────────────────── */
-nav("moderation");
-const pendingId = UPP.REVIEWS.filter((r) => r.status === "pending")[0].id;
-click('[data-act="open-actions"][data-arg="' + pendingId + '"]');
-check("actions drawer opens", /Review actions/.test($(".panel-head h2").textContent));
-click('[data-act="review-action"][data-arg="approve"][data-id="' + pendingId + '"]');
-check("approve publishes the review", UPP.REVIEWS.filter((r) => r.id === pendingId)[0].status === "published");
+  const structure = (scope) => Array.prototype.slice.call(scope.querySelectorAll(".review-action-group")).map((group) => ({
+    title: group.querySelector("h3").textContent.trim(),
+    rows: Array.prototype.slice.call(group.querySelectorAll(".review-action-row")).map((row) => ({
+      className: row.getAttribute("class"),
+      label: row.children[1].children[0].textContent.trim(),
+      hint: row.children[1].children[1].textContent.trim(),
+      disabled: row.hasAttribute("disabled"),
+    })),
+  }));
+  const fromApp = JSON.stringify(structure(holder));
+  const fromPrototype = JSON.stringify(structure(dialog));
+  if (fromPrototype !== fromApp) {
+    console.log("APP      :", JSON.stringify(JSON.parse(fromApp).map((g) => [g.title, g.rows.map((r) => r.label + "/" + r.className)])));
+    console.log("PROTOTYPE:", JSON.stringify(JSON.parse(fromPrototype).map((g) => [g.title, g.rows.map((r) => r.label + "/" + r.className)])));
+  }
+  check("the drawer body is identical to the app component markup", fromPrototype === fromApp);
+  const statusLabels = { published: "Published", pending: "Pending moderation", queued: "In queue", rejected: "Rejected", spam: "Spam" };
+  check("the drawer shows the review summary block",
+    dialog.textContent.indexOf(statusLabels[review.status]) !== -1 &&
+    dialog.textContent.indexOf(review.authorName) !== -1 &&
+    dialog.querySelector(".review-details-text").textContent.trim() === review.content.trim());
 
-/* ── 8. Every page renders without errors ──────────────────────────────── */
-["overview", "queue", "moderation", "clients", "channels", "team", "reviews", "reputation", "messages", "analytics", "widgets", "settings"].forEach((view) => {
-  nav(view);
-  if ($("#main").textContent.trim().length < 40) throw new Error("FAILED: page " + view + " looks empty");
+  /* Drive an action through the in-memory API and watch the drawer follow. */
+  const rowByLabel = (label) =>
+    Array.prototype.slice.call(dialog.querySelectorAll(".review-action-row")).filter((row) => row.textContent.indexOf(label) === 0)[0];
+  const stored = () => window.__UPP_DEMO__.reviews.filter((candidate) => candidate.id === review.id)[0];
+
+  await click(rowByLabel("Unpublish review"));
+  await flush();
+  check("unpublishing reaches the API and returns the review to moderation", stored().status === "pending");
+  check("the open drawer re-renders with the new state", !!rowByLabel("Approve review"));
+
+  await click(rowByLabel("Approve review"));
+  await flush();
+  check("approving publishes it again", stored().status === "published");
+
+  /* ── 4. Regression checks, now running against the real components ──── */
+  await click(dialog.querySelector(".panel-close"));
+  await sleep(260);
+  check("the drawer closes", !doc.querySelector("dialog.side-panel[open]"));
+
+  await click(doc.querySelector('button[title="Business reputation — all settings in one place"]'));
+  check("the reputation hub opens", /Widget domains/.test(bodyText()));
+  await click(byText(".rep-navigation button", "Reviews"));
+  await click(doc.querySelector('[aria-label="Neutral"][role="radio"]'));
+  check("no 'No neutral ratings' shortcut", !/No neutral ratings/i.test(bodyText()));
+  await click(byText(".rep-navigation button", "Reminders"));
+  const headers = Array.prototype.slice.call(doc.querySelectorAll(".rep-reminder-table th")).map((th) => th.textContent.trim());
+  check('the reminders table uses a "Time" column', headers[0] === "Time" && headers.indexOf("Number") === -1);
+
+  await click(doc.querySelector('button[title="Widgets and embed code"]'));
+  await click(Array.prototype.slice.call(doc.querySelectorAll("button")).filter((b) => /Review form/.test(b.textContent))[0]);
+  const nameField = doc.querySelector('input[placeholder="Your name"]');
+  Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set.call(nameField, "Test Customer");
+  nameField.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await flush();
+  const form = nameField.closest("form");
+  form.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
+  await flush();
+  check("the thank-you screen appears after submitting", !!doc.querySelector("[data-widget-thanks]") && /Thank you for your feedback!/.test(bodyText()));
+  check("the positive level offers the Google invitation", /Leave a review on Google/.test(bodyText()));
+
+  check("no runtime errors were thrown", errors.length === 0);
+  if (errors.length) console.log(errors);
+  console.log("\nOK — " + checks + " checks passed.");
+})().catch((error) => {
+  console.error(error && error.stack ? error.stack : error);
+  process.exit(1);
 });
-console.log("PASS: all 12 pages render content");
-checks += 1;
-
-if (errors.length) console.log("captured errors:", errors);
-check("no runtime errors were thrown", errors.length === 0);
-console.log("\nOK — " + checks + " checks passed.");

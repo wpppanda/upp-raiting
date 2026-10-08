@@ -3,40 +3,14 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>up. — Business reputation · HTML prototype</title>
-<meta name="description" content="Standalone HTML version of the Uppointment review &amp; business-reputation workspace: all pages and all options, no build step." />
-<link rel="stylesheet" href="styles.css" />
+<title>up. — Review &amp; Reputation Management Platform (HTML build)</title>
+<meta name="description" content="Standalone HTML build of the workspace: the real React components from src/, bundled, with an in-memory API." />
+<link rel="stylesheet" href="app.css" />
 </head>
-<body>
-  <header class="reference-app-header">
-    <button class="reference-header-menu" id="toggle-sidebar" type="button" aria-label="Toggle navigation" title="Toggle navigation">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18" /></svg>
-    </button>
-    <button class="reference-header-brand" type="button" data-act="nav" data-view="reviews" title="up. — all reviews">
-      <span class="reference-logo"><span class="reference-logo-ribbon"></span><span class="reference-logo-word">uppointment</span></span>
-    </button>
-    <div class="reference-header-search">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
-      <input id="global-search" type="search" placeholder="Search reviews, authors, IDs…" aria-label="Search reviews" />
-    </div>
-    <div class="reference-header-actions">
-      <button class="reference-header-bell" type="button" data-act="nav" data-view="moderation" title="Reviews awaiting moderation">
-        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></svg>
-        <span id="pending-badge">0</span>
-      </button>
-      <button class="reference-header-company" type="button" data-act="nav" data-view="settings" id="header-company">Zerna Coffee</button>
-      <button class="reference-header-avatar" type="button" data-act="nav" data-view="team" title="Team">ZC</button>
-    </div>
-  </header>
-
-  <div class="shell">
-    <aside class="app-reference-navigation" id="sidebar" aria-label="Main navigation"></aside>
-    <main class="content" id="main"></main>
-  </div>
-
-  <div id="panels"></div>
-  <div id="toasts" aria-live="polite"></div>
-
-  <script src="app.js"></script>
+<!-- Same shell as src/app/layout.tsx -->
+<body class="antialiased min-h-screen">
+  <div id="root"></div>
+  <script src="demo-data.js"></script>
+  <script src="app.bundle.js"></script>
 </body>
 </html>

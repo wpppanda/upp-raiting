@@ -1,9 +1,21 @@
-# HTML-версия интерфейса (без сборки)
+# HTML-версия интерфейса
 
-Полная standalone-версия рабочего пространства: **все страницы и все опции**,
-как в Next.js-приложении (`src/app/dashboard.tsx`, `src/components/reputation-hub.tsx`,
-`src/components/widget-drawer.tsx`, `public/widget.js`), но одним обычным HTML —
-без Node, без сборки, без базы данных.
+Полная standalone-версия рабочего пространства — **те же страницы и те же опции**,
+что и в Next.js-приложении, потому что это **не переписанный руками прототип,
+а собранные из исходников приложения артефакты**:
+
+```bash
+npm run build:html
+# html/app.css       ← src/app/globals.css (+ reputation.css) через Tailwind
+# html/app.bundle.js ← html/entry.tsx → src/app/dashboard.tsx и все его компоненты
+```
+
+Разметка панелей, таблиц, виджета и экранов берётся напрямую из
+`src/app/dashboard.tsx`, `src/components/side-panel.tsx`,
+`src/components/review-actions.tsx`, `src/components/review-actions-drawer.tsx`,
+`src/components/reputation-hub.tsx`, `src/components/widget-drawer.tsx`,
+а стили — из `src/app/globals.css`. Поэтому вёрстка не может «разъехаться»
+с приложением: она и есть вёрстка приложения.
 
 ## Как открыть
 
@@ -14,46 +26,41 @@
    # → http://localhost:4173
    ```
 
-Файлы:
+| Файл              | Что внутри                                                                     |
+| ----------------- | ------------------------------------------------------------------------------ |
+| `index.html`      | Оболочка: тот же `<body class="antialiased min-h-screen">`, что в `layout.tsx`  |
+| `app.css`         | Скомпилированный `globals.css` + `reputation.css` + утилиты Tailwind (**генерируется**) |
+| `app.bundle.js`   | React + компоненты приложения (**генерируется**)                                |
+| `demo-data.js`    | Демо-данные и in-memory замена API-роутов (руками правится только он)           |
+| `entry.tsx`       | Точка входа сборки: монтирует `<Dashboard initialData={window.__UPP_DEMO__} />` |
+| `fonts/`          | Montserrat (variable, latin, OFL-1.1) — тот же файл, что и в `public/fonts/`    |
 
-| Файл        | Что внутри                                                        |
-| ----------- | ----------------------------------------------------------------- |
-| `index.html`| Каркас: шапка, боковое меню, контейнеры страницы и панелей        |
-| `styles.css`| Стили (`globals.css` + `reputation.css` + утилиты из dashboard.tsx)|
-| `app.js`    | Данные-демо, состояние, все страницы, панели и обработчики        |
-| `fonts/`    | Montserrat (variable, latin, OFL-1.1) — тот же файл, что и в `public/fonts/` |
+`app.css` и `app.bundle.js` закоммичены, чтобы папку можно было открыть без Node;
+после правок в `src/` их нужно пересобрать и закоммитить (`npm run check` падает,
+если они устарели).
 
-Шрифт подключён тем же `@font-face`, что и в `src/app/globals.css`, поэтому
-прототип и рабочее приложение выглядят одинаково и работают без интернета.
+## Страницы и панели
 
-## Страницы
+Навигация приложения: Overview · All reviews · Publication queue · Moderation ·
+Review authors · Domains and channels · Team · **Business reputation** ·
+Invitations and reminders · Analytics and reports · Widgets and embed code ·
+Feedback and QR code.
 
-Overview · All reviews · Publication queue · Moderation · Review authors ·
-Domains and channels · Team · **Business reputation** · Invitations and reminders ·
-Analytics · Widgets & Embed SDK · Settings.
-
-Панели: предпросмотр виджета (Feed / Form / Badge / All-in-one / After submission),
-действия по отзыву, редактор текста напоминания, добавление отзыва.
-
-## Что учтено из последних правок
-
-- **«No neutral ratings» убран** — в Business reputation → Reviews осталась только
-  подсказка, если у уровня нет ни одной звезды.
-- **В напоминаниях колонка называется «Time»** (было «Number»), подпись — «The time and
-  unit set the delay…».
-- **Разрешённые домены виджета** — Business reputation → Protection & Settings →
-  «Widget domains»: основной домен + список дополнительных (`*.example.com` — все
-  поддомены). Список показывается на странице Widgets, в Domains and channels и в
-  панели предпросмотра.
-- **Стандартное «спасибо» по уровням после отправки** — в песочнице виджета после
-  Submit форма заменяется экраном благодарности: для позитива — приглашение в Google,
-  для нейтрала/негатива — кнопки «Email customer support» / «Chat with support».
-  Тот же экран доступен в панели предпросмотра на вкладке «After submission».
-
-Данные демо хранятся в памяти вкладки: перезагрузка страницы возвращает исходное состояние.
+Панели: действия по отзыву (`dialog.side-panel`), предпросмотр виджета
+(Review feed / Review form / Rating badge / All-in-one), редактор напоминаний,
+добавление отзыва. Данные демо живут в памяти вкладки: перезагрузка возвращает
+исходное состояние.
 
 ## Проверка
 
 ```bash
-node scripts/check-html-prototype.cjs   # 44 проверки через jsdom
+npm run check:html
+# 1) сборка актуальна относительно src/  2) 29 проверок в jsdom
 ```
+
+Проверка загружает закоммиченный бандл, открывает панель действий и сравнивает её
+со статической разметкой самого компонента приложения
+(`renderToStaticMarkup(<ReviewActionsDrawer …/>)`) — совпадать должны группы,
+строки действий, их подписи, подсказки, классы и состояние `disabled`.
+Плюс регрессии: «No neutral ratings» отсутствует, в напоминаниях колонка «Time»,
+экран благодарности по уровням показывается после отправки формы.

@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "check:domains": "node scripts/check-widget-domains.cjs",
     "check:ui": "node scripts/check-reputation-ui.cjs",
-    "check:html": "node scripts/check-html-prototype.cjs",
+    "build:html": "node scripts/build-html-prototype.cjs",
+    "check:html": "node scripts/build-html-prototype.cjs --check && node scripts/check-html-prototype.cjs",
     "check": "npm run check:domains && npm run check:ui && npm run check:html"
   },
   "dependencies": {
