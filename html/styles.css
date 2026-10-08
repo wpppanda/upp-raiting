@@ -4,6 +4,16 @@
    used by src/app/dashboard.tsx, without any build step.
    ========================================================================== */
 
+/* Same locally hosted Montserrat the Next.js app declares in globals.css, so the
+   prototype and the real workspace render with the same typeface. OFL-1.1. */
+@font-face {
+  font-family: "Montserrat";
+  src: url("fonts/montserrat-latin-variable.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
 :root {
   --app-bg: #f7f7fc;
   --app-surface: #fff;
@@ -23,7 +33,7 @@ html, body {
   margin: 0;
   background: var(--app-bg);
   color: var(--app-text);
-  font-family: "Montserrat", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: "Montserrat", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
 }

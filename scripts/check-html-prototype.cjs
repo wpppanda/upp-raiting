@@ -51,7 +51,29 @@ const setSelect = (el, value) => {
   el.dispatchEvent(new window.Event("change", { bubbles: true }));
 };
 
-let checks = 0;
+/* ── 0. Typography: the prototype must use the same locally hosted font ──── */
+const css = fs.readFileSync(path.join(root, "html", "styles.css"), "utf8");
+const fontChecks = [
+  ["styles.css declares the Montserrat @font-face", /@font-face\s*{[^}]*font-family:\s*"Montserrat"[^}]*}/.test(css)],
+  ["the @font-face points at the bundled woff2", /url\("fonts\/montserrat-latin-variable\.woff2"\) format\("woff2"\)/.test(css)],
+  ["the prototype ships the font file", fs.existsSync(path.join(root, "html", "fonts", "montserrat-latin-variable.woff2"))],
+  ["the Next.js app ships the same font file", fs.existsSync(path.join(root, "public", "fonts", "montserrat-latin-variable.woff2"))],
+  ["body uses Montserrat first", /font-family:\s*"Montserrat",/.test(css)],
+];
+for (const [label, ok] of fontChecks) {
+  if (!ok) throw new Error("FAILED: " + label);
+  console.log("PASS: " + label);
+}
+// jsdom does not cascade linked stylesheets, so read the rule the way a browser would apply it.
+const bodyRule = /html,\s*body\s*{([^}]*)}/.exec(css);
+const declaredFont = bodyRule ? (/font-family:\s*([^;]+);/.exec(bodyRule[1]) || [])[1] : "";
+if (!declaredFont || !declaredFont.trim().startsWith('"Montserrat"')) {
+  throw new Error("FAILED: html/body font-family is " + (declaredFont || "not declared"));
+}
+console.log("PASS: html/body font-family is " + declaredFont.trim());
+fontChecks.push(["html/body font-family declared", true]);
+
+let checks = fontChecks.length + 1;
 function check(label, condition) {
   checks += 1;
   if (!condition) throw new Error("FAILED: " + label);
