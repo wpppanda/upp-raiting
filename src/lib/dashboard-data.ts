@@ -33,6 +33,8 @@ export type DashboardProject = {
   id: string;
   name: string;
   domain: string;
+  /** Extra origins where the widget is allowed to run, next to the primary domain. */
+  allowedDomains: string[];
   brandColor: string;
   timezone: string;
   ratingScale: string;
@@ -296,7 +298,24 @@ async function syncDemoReviews() {
   }
 }
 
+/**
+ * Idempotent, one-time-per-process schema guard for columns added after the
+ * first deployment (the project has no migration folder; drizzle-kit push is
+ * the usual path, but the app must keep working until it runs).
+ */
+let schemaReady: Promise<void> | null = null;
+function ensureSchema(): Promise<void> {
+  schemaReady ??= db
+    .execute(sql`alter table "projects" add column if not exists "allowed_domains" jsonb not null default '[]'::jsonb`)
+    .then(() => undefined)
+    .catch((error) => {
+      console.warn("Widget domain allow-list column check skipped:", error instanceof Error ? error.message : error);
+    });
+  return schemaReady;
+}
+
 export async function ensureProject(): Promise<DashboardProject> {
+  await ensureSchema();
   const { projectCopyDefaults } = await import("@/lib/project-default-copy");
   // Always use the oldest project so every request sees the same one (an unordered LIMIT 1 can flip after an UPDATE).
   const [existing] = await db.select().from(projects).orderBy(asc(projects.createdAt), asc(projects.id)).limit(1);
@@ -344,6 +363,15 @@ export async function ensureProject(): Promise<DashboardProject> {
         .where(eq(projects.id, existing.id))
         .returning();
       if (withSwitches) project = withSwitches;
+    }
+    // Rows created before the widget allow-list existed get an empty list.
+    if (!Array.isArray(existing.allowedDomains)) {
+      const [withDomains] = await db
+        .update(projects)
+        .set({ allowedDomains: [] })
+        .where(eq(projects.id, existing.id))
+        .returning();
+      if (withDomains) project = withDomains;
     }
     // Translate only exact legacy built-in presets, never custom copy or customer reviews.
     for (const key of Object.keys(projectCopyDefaults) as Array<keyof typeof projectCopyDefaults>) {

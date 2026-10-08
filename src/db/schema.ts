@@ -44,6 +44,8 @@ export const projects = pgTable("projects", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: varchar("name", { length: 180 }).notNull().default("Zerna Coffee"),
   domain: varchar("domain", { length: 255 }).notNull().default("zerno.coffee"),
+  /** Extra origins where the public widget may run (in addition to `domain`). */
+  allowedDomains: jsonb("allowed_domains").$type<string[]>().notNull().default([]),
   brandColor: varchar("brand_color", { length: 7 }).notNull().default("#617a58"),
   timezone: varchar("timezone", { length: 80 }).notNull().default("Europe/Moscow"),
   ratingScale: varchar("rating_scale", { length: 24 }).notNull().default("stars"),

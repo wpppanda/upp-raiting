@@ -8,6 +8,8 @@ import WidgetDrawer, { type PreviewKind } from "@/components/widget-drawer";
 import StatsPanel from "@/components/stats-panel";
 import ReviewActionsDrawer from "@/components/review-actions-drawer";
 import type { ActionOptions, ActionResult, ReviewAction } from "@/components/review-actions";
+import type { FollowUp } from "@/lib/follow-up";
+import GoogleG from "@/components/google-g";
 
 export type { DashboardReview, DashboardProject, DashboardData };
 
@@ -145,6 +147,71 @@ function SidebarIcon({ name, active }: { name: string; active?: boolean }) {
   }
 }
 
+/**
+ * The standard thank-you screen shown after a review is submitted.
+ * Its content depends on the rating level: a Google invitation for positive
+ * reviews, support email / chat for neutral and negative ones.
+ */
+function WidgetThanksScreen({ followUp, status, project, onReset }: {
+  followUp: FollowUp | null;
+  status: string;
+  project: DashboardProject;
+  onReset: () => void;
+}) {
+  const pending = status === "pending";
+  return (
+    <div className="max-w-md bg-white p-6 rounded-xl border border-slate-200 text-center" data-widget-thanks>
+      <span className="mx-auto mb-3 grid h-10 w-10 place-items-center rounded-full text-lg text-white" style={{ background: project.brandColor }}>✓</span>
+      <h3 className="text-sm font-bold text-slate-900">Thank you for your feedback!</h3>
+      <p className="mt-2 text-xs leading-relaxed text-slate-500">
+        {pending ? "Your review has been submitted for moderation." : "Thank you for your review!"}
+      </p>
+      {followUp?.google && (
+        <div className="mt-4">
+          <p className="mb-3 text-xs leading-relaxed text-slate-500">We would love it if you shared your experience on Google.</p>
+          <a
+            href={followUp.google.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-full border border-[#dadce0] bg-white px-4 py-2.5 text-xs font-medium text-slate-700"
+          >
+            <GoogleG size={16} /> Leave a review on Google
+          </a>
+        </div>
+      )}
+      {followUp?.support && (
+        <div className="mt-4">
+          {followUp.support.text && <p className="mb-3 text-xs leading-relaxed text-slate-500">{followUp.support.text}</p>}
+          <div className="space-y-2">
+            {followUp.support.contact && (
+              <a
+                href={`mailto:${followUp.support.email}?subject=${encodeURIComponent("Follow-up about my review")}`}
+                className="block rounded-md border border-[#d0d5dd] bg-white px-3 py-2.5 text-xs font-medium text-slate-600"
+              >
+                Email customer support
+              </a>
+            )}
+            {followUp.support.chat && (
+              <a
+                href={followUp.support.chatUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block rounded-md px-3 py-2.5 text-xs font-medium text-white"
+                style={{ background: project.brandColor }}
+              >
+                Chat with support
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+      <button type="button" onClick={onReset} className="mt-5 text-xs font-semibold text-blue-600 hover:text-blue-800">
+        Leave another review
+      </button>
+    </div>
+  );
+}
+
 export default function Dashboard({ initialData }: { initialData: DashboardData }) {
   const [data, setData] = useState<DashboardData>(initialData);
   const [currentView, setCurrentView] = useState<MainView>("reviews");
@@ -187,6 +254,8 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewKind, setPreviewKind] = useState<PreviewKind>("reviews");
   const [previewProject, setPreviewProject] = useState<DashboardProject | null>(null);
+  // Standard thank-you screen of the widget sandbox, shown after a submission.
+  const [previewThanks, setPreviewThanks] = useState<{ followUp: FollowUp | null; status: string } | null>(null);
   const [statsVisible, setStatsVisible] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
@@ -296,8 +365,15 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
           content: newContent.trim(),
         }),
       });
+      const result = await res.json().catch(() => ({} as Record<string, unknown>));
       if (res.ok) {
         await refreshData();
+        // The sandbox behaves like the live widget: the standard thank-you
+        // screen for the submitted rating level replaces the form.
+        setPreviewThanks({
+          followUp: (result.followUp as FollowUp | undefined) ?? null,
+          status: String((result.review as { status?: string } | undefined)?.status ?? "pending"),
+        });
         showToast("Review added successfully.");
         setNewReviewModalOpen(false);
         setNewAuthorName("");
@@ -305,8 +381,7 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
         setNewContent("");
         setNewRating(5);
       } else {
-        const err = await res.json();
-        showToast(err.error || "Unable to create the review.");
+        showToast(String(result.error ?? "") || "Unable to create the review.");
       }
     } catch {
       showToast("Connection failed. Please try again.");
@@ -1793,7 +1868,7 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
                           className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-blue-500"
                         />
                         <span className="text-[11px] text-slate-400 mt-0.5 block">
-                          The widget will only load on this domain
+                          The widget always loads on this domain. Extra allowed domains are set in Business reputation → Protection &amp; Settings.
                         </span>
                       </div>
 
@@ -1847,7 +1922,10 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
                 ].map((w) => (
                   <button
                     key={w.id}
-                    onClick={() => setWidgetType(w.id as any)}
+                    onClick={() => {
+                      setWidgetType(w.id as any);
+                      setPreviewThanks(null);
+                    }}
                     className={`p-4 rounded-xl border text-left transition-all ${
                       widgetType === w.id
                         ? "border-blue-600 bg-blue-50/30 ring-2 ring-blue-600/10"
@@ -1879,6 +1957,36 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
                 <pre className="p-4 bg-slate-900 text-slate-100 text-xs rounded-lg overflow-x-auto font-mono">
                   <code>{widgetSnippet}</code>
                 </pre>
+              </div>
+
+              {/* Allowed domains — the widget only loads on these origins */}
+              <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-3 mb-1">
+                  <h2 className="text-sm font-bold text-slate-800">Allowed domains for the widget</h2>
+                  <button
+                    onClick={() => setCurrentView("reputation")}
+                    className="text-xs font-semibold text-blue-600 hover:text-blue-800"
+                  >
+                    Manage domains →
+                  </button>
+                </div>
+                <p className="text-xs text-slate-500 mb-4">
+                  The widget and its API answer requests only from these domains. Every other origin is rejected, so the snippet cannot be reused on a third-party site.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <span className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-700">
+                    {data.project.domain}
+                    <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-blue-700">primary</span>
+                  </span>
+                  {(data.project.allowedDomains ?? []).filter(Boolean).map((domain) => (
+                    <span key={domain} className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700">
+                      {domain}
+                    </span>
+                  ))}
+                  {!(data.project.allowedDomains ?? []).filter(Boolean).length && (
+                    <span className="text-xs text-slate-400 self-center">No extra domains yet — add them in Business reputation → Protection &amp; Settings.</span>
+                  )}
+                </div>
               </div>
 
               {/* Live Interactive Sandbox Preview */}
@@ -1927,7 +2035,16 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
                     </div>
                   )}
 
-                  {(widgetType === "form" || widgetType === "all-in-one") && (
+                  {(widgetType === "form" || widgetType === "all-in-one") && previewThanks && (
+                    <WidgetThanksScreen
+                      followUp={previewThanks.followUp}
+                      status={previewThanks.status}
+                      project={data.project}
+                      onReset={() => setPreviewThanks(null)}
+                    />
+                  )}
+
+                  {(widgetType === "form" || widgetType === "all-in-one") && !previewThanks && (
                     <form onSubmit={handleCreateReview} className="max-w-md bg-white p-5 rounded-xl border border-slate-200 space-y-3">
                       <div className="font-bold text-slate-900 text-sm">Leave a review</div>
                       <div>

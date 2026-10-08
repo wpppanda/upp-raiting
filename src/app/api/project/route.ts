@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { projects, type NotifyChannelKey, type NotifyChannels, type Reminder, type ReminderChannelKey } from "@/db/schema";
 import { ensureProject } from "@/lib/dashboard-data";
+import { parseAllowedDomains } from "@/lib/widget-domains";
 
 export const dynamic = "force-dynamic";
 
@@ -82,6 +83,11 @@ export async function PATCH(request: Request) {
       return fail("Enter a valid domain, for example example.com.");
     }
     values.domain = domain;
+  }
+  if (body.allowedDomains !== undefined) {
+    const parsed = parseAllowedDomains(body.allowedDomains);
+    if (typeof parsed === "string") return fail(parsed);
+    values.allowedDomains = parsed;
   }
   if (body.brandColor !== undefined) {
     if (typeof body.brandColor !== "string" || !/^#[0-9a-fA-F]{6}$/.test(body.brandColor)) {

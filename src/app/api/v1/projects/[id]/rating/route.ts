@@ -1,8 +1,28 @@
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { projects, reviews } from "@/db/schema";
+import { originAllowed } from "@/lib/widget-domains";
 
 export const dynamic = "force-dynamic";
+
+export async function OPTIONS(request: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
+  const origin = request.headers.get("origin");
+  const [project] = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+    ? await db.select().from(projects).where(eq(projects.id, id)).limit(1)
+    : [];
+  if (!project) return Response.json({ error: "Project not found." }, { status: 404 });
+  if (!originAllowed(project, origin)) return Response.json({ error: "This domain is not connected to the project." }, { status: 403 });
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": origin ?? "*",
+      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Access-Control-Max-Age": "600",
+      Vary: "Origin",
+    },
+  });
+}
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
@@ -14,18 +34,8 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   try {
     const [project] = await db.select().from(projects).where(eq(projects.id, id)).limit(1);
     if (!project) return Response.json({ error: "Project not found." }, { status: 404 });
-    if (origin) {
-      try {
-        const hostname = new URL(origin).hostname.toLowerCase();
-        const configured = project.domain.toLowerCase();
-        const root = configured.startsWith("*.") ? configured.slice(2) : configured;
-        const allowed = configured.startsWith("*.")
-          ? hostname === root || hostname.endsWith(`.${root}`)
-          : hostname === root;
-        if (!allowed) return Response.json({ error: "This domain is not connected to the project." }, { status: 403 });
-      } catch {
-        return Response.json({ error: "Invalid request origin." }, { status: 403 });
-      }
+    if (!originAllowed(project, origin)) {
+      return Response.json({ error: "This domain is not connected to the project." }, { status: 403 });
     }
 
     const [summary] = await db

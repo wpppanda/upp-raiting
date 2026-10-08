@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import type { DashboardProject, NotifyChannelKey, NotifyChannels, Reminder, ReminderChannelKey } from "@/lib/dashboard-data";
 import GoogleG from "@/components/google-g";
 import SidePanel from "@/components/side-panel";
+import { MAX_ALLOWED_DOMAINS } from "@/lib/widget-domains";
 
 type Sentiment = "positive" | "neutral" | "negative";
 type SectionKey = "reviews" | "reminders" | "queue" | "protection";
@@ -20,7 +21,7 @@ const PAGE_COPY: Record<SectionKey, { title: string; description: string }> = {
   reviews: { title: "Reviews", description: "Choose how customer reviews are classified, published, and answered." },
   reminders: { title: "Reminders", description: "Set up automatic review invitations after a customer visit or order." },
   queue: { title: "Publication queue", description: "Control publication limits and priority rules for queued reviews." },
-  protection: { title: "Protection & Settings", description: "Control public widget fields, form privacy, Google reviews, and spam filters." },
+  protection: { title: "Protection & Settings", description: "Control the widget domains, public widget fields, form privacy, Google reviews, and spam filters." },
 };
 const COLORS = {
   positive: { label: "Positive", dot: "#2bb67c", bg: "#f0faf5", border: "#c9e9d7", text: "#33976b" },
@@ -153,8 +154,35 @@ function RatingRange({ kind, positive, neutral, onChange }: { kind: Sentiment; p
       })}
     </div>
     <div className="rep-range-summary">{(["positive", "neutral", "negative"] as const).map(category => <span key={category}><i style={{ background: COLORS[category].dot }} /><strong>{COLORS[category].label}:</strong>{rangeText(...getRange(category, positive, neutral))}</span>)}</div>
-    {kind !== "positive" && !hasNone && <button type="button" className="rep-link" style={{ marginTop: 9 }} onClick={() => onChange(positive, kind === "neutral" ? positive : 1)}>No {kind} ratings</button>}
     {hasNone && <p className="rep-hint rep-warning">No ratings are {kind}. Select a star above to assign a range.</p>}
+  </SettingRow>;
+}
+function DomainList({ primary, domains, onChange }: { primary: string; domains: string[]; onChange: (domains: string[]) => void }) {
+  const update = (index: number, value: string) => onChange(domains.map((item, position) => (position === index ? value : item)));
+  return <SettingRow
+    label="Allowed domains for the widget"
+    help="The widget and its API answer requests only from the primary domain and from the domains listed here. Add *.example.com to allow every sub-domain."
+    hint="Requests from any other domain are rejected with an error, so the widget cannot be copied to a third-party site."
+  >
+    <div className="rep-domain-list">
+      <div className="rep-domain-chip is-primary"><span>{primary || "—"}</span><em>primary</em></div>
+      {domains.map((domain, index) => <div className="rep-domain-chip" key={`rep-domain-${index}`}>
+        <input
+          type="text"
+          inputMode="url"
+          spellCheck={false}
+          aria-label={`Allowed widget domain ${index + 1}`}
+          placeholder="example.com"
+          value={domain}
+          onChange={event => update(index, event.target.value)}
+        />
+        <button type="button" className="rep-domain-remove" aria-label={`Remove domain ${index + 1}`} onClick={() => onChange(domains.filter((_, position) => position !== index))}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+        </button>
+      </div>)}
+    </div>
+    <button type="button" className="rep-link" style={{ marginTop: 9 }} disabled={domains.length >= MAX_ALLOWED_DOMAINS} onClick={() => onChange([...domains, ""])}>+ Add domain</button>
+    {domains.length >= MAX_ALLOWED_DOMAINS && <p className="rep-hint">You can allow up to {MAX_ALLOWED_DOMAINS} extra domains.</p>}
   </SettingRow>;
 }
 function NotificationChannels({ channels, onChange }: { channels: NotifyChannels; onChange: (channels: NotifyChannels) => void }) {
@@ -193,7 +221,10 @@ export default function ReputationHub({ project, onSaved, onToast, onPreview }: 
       // These values are managed by the application's general settings, not this workspace.
       const { id, name, domain, brandColor, timezone, createdAt, ...reputationSettings } = form;
       void id; void name; void domain; void brandColor; void timezone; void createdAt;
-      const response = await fetch("/api/project", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...reputationSettings, ratingScale: "stars" }) });
+      const allowedDomains = (reputationSettings.allowedDomains ?? [])
+        .map((domain: string) => domain.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/+.*$/, ""))
+        .filter((domain: string, index: number, all: string[]) => domain.length > 0 && all.indexOf(domain) === index);
+      const response = await fetch("/api/project", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...reputationSettings, allowedDomains, ratingScale: "stars" }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Unable to save changes.");
       setForm(result.project);
@@ -268,12 +299,12 @@ export default function ReputationHub({ project, onSaved, onToast, onPreview }: 
       <Section title="Reminder schedule" description="Choose when reminders are sent automatically." action={<button type="button" className="rep-button" onClick={addReminder}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true"><path d="M12 4v16M4 12h16" /></svg>Add reminder</button>}>
         <div className="rep-reminder-table-wrap">
           <table className="rep-reminder-table" aria-label="Reminder schedule">
-            <thead><tr><th scope="col">Number</th><th scope="col">Unit</th><th scope="col">Channel</th><th scope="col">Recipient</th><th scope="col">Message</th><th scope="col" style={{ textAlign: "center" }}>Active</th><th scope="col"><span className="sr-only">Delete</span></th></tr></thead>
+            <thead><tr><th scope="col">Time</th><th scope="col">Unit</th><th scope="col">Channel</th><th scope="col">Recipient</th><th scope="col">Message</th><th scope="col" style={{ textAlign: "center" }}>Active</th><th scope="col"><span className="sr-only">Delete</span></th></tr></thead>
             <tbody>{form.reminders.length === 0 ? <tr><td colSpan={7}><p className="rep-empty">No reminders yet. Add your first review invitation.</p></td></tr> : form.reminders.map((reminder, index) => {
               const unit = units[reminder.id] ?? inferUnit(reminder.delayMinutes);
               const amount = Math.round(reminder.delayMinutes / multiplier(unit));
               return <tr key={reminder.id} data-reminder-id={reminder.id} className={reminder.enabled === false ? "is-disabled" : ""}>
-                <td><input type="number" min={0} max={Math.floor(525600 / multiplier(unit))} aria-label={`Reminder ${index + 1} delay amount`} className="rep-table-input" value={amount} onChange={event => updateReminder(reminder.id, { delayMinutes: Math.max(0, Math.round(Number(event.target.value) || 0)) * multiplier(unit) })} /></td>
+                <td><input type="number" min={0} max={Math.floor(525600 / multiplier(unit))} aria-label={`Reminder ${index + 1} delay time`} className="rep-table-input" value={amount} onChange={event => updateReminder(reminder.id, { delayMinutes: Math.max(0, Math.round(Number(event.target.value) || 0)) * multiplier(unit) })} /></td>
                 <td><select className="rep-table-select" aria-label={`Reminder ${index + 1} delay unit`} value={unit} onChange={event => { const nextUnit = event.target.value as ReminderUnit; setUnits(current => ({ ...current, [reminder.id]: nextUnit })); updateReminder(reminder.id, { delayMinutes: amount * multiplier(nextUnit) }); }}>{UNITS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></td>
                 <td><select className="rep-table-select" aria-label={`Reminder ${index + 1} channel`} value={reminder.channel} onChange={event => updateReminder(reminder.id, { channel: event.target.value as ReminderChannelKey })}>{CHANNELS.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}</select></td>
                 <td><input className="rep-table-input recipient" aria-label={`Reminder ${index + 1} recipient`} placeholder={reminder.channel === "email" ? "customer@email.com" : "+1 555 000 0000"} value={reminder.target} onChange={event => updateReminder(reminder.id, { target: event.target.value })} /></td>
@@ -284,7 +315,7 @@ export default function ReputationHub({ project, onSaved, onToast, onPreview }: 
             })}</tbody>
           </table>
         </div>
-        <p className="rep-settings-note">The number and unit set the delay after a customer visit or order. Changes apply when you save.</p>
+        <p className="rep-settings-note">The time and unit set the delay after a customer visit or order. Changes apply when you save.</p>
       </Section>
     </>;
   }
@@ -309,6 +340,9 @@ export default function ReputationHub({ project, onSaved, onToast, onPreview }: 
 
   function protectionSettings() {
     return <>
+      <Section title="Widget domains" description="The widget only loads on the primary domain and on the extra domains you allow here.">
+        <DomainList primary={form.domain} domains={form.allowedDomains ?? []} onChange={value => set("allowedDomains", value)} />
+      </Section>
       <Section title="Google reviews" icon={<GoogleG size={16} />} description="Configure the link used by the Google review invitation for positive customers.">
         <SettingRow label="Google review link" htmlFor="rep-google-url" hint="Copy it from Google Business Profile → Ask for reviews.">
           <input id="rep-google-url" className="rep-input" placeholder="https://g.page/r/…/review" value={form.googleReviewUrl} onChange={event => set("googleReviewUrl", event.target.value)} />

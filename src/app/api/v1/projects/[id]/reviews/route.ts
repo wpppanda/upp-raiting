@@ -5,23 +5,9 @@ import { publishDueReviews } from "@/lib/dashboard-data";
 import { encryptEmail } from "@/lib/pii";
 import { buildFollowUp } from "@/lib/follow-up";
 import { releaseBoostedPositives, shouldBoostPositive } from "@/lib/publish-rules";
+import { originAllowed } from "@/lib/widget-domains";
 
 export const dynamic = "force-dynamic";
-
-function originAllowed(configuredDomain: string, origin: string | null) {
-  if (!origin) return true;
-  try {
-    const hostname = new URL(origin).hostname.toLowerCase();
-    const domain = configuredDomain.toLowerCase();
-    if (domain.startsWith("*.")) {
-      const root = domain.slice(2);
-      return hostname === root || hostname.endsWith(`.${root}`);
-    }
-    return hostname === domain;
-  } catch {
-    return false;
-  }
-}
 
 function jsonResponse(body: unknown, origin: string | null, status = 200) {
   return Response.json(body, {
@@ -48,7 +34,7 @@ export async function OPTIONS(request: Request, context: { params: Promise<{ id:
   const origin = request.headers.get("origin");
   const project = await getProject(id);
   if (!project) return Response.json({ error: "Project not found." }, { status: 404 });
-  if (!originAllowed(project.domain, origin)) return Response.json({ error: "Domain not allowed." }, { status: 403 });
+  if (!originAllowed(project, origin)) return Response.json({ error: "Domain not allowed." }, { status: 403 });
   return new Response(null, { status: 204, headers: {
     "Access-Control-Allow-Origin": origin ?? "*",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -64,7 +50,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   try {
     const project = await getProject(id);
     if (!project) return jsonResponse({ error: "Project not found." }, origin, 404);
-    if (!originAllowed(project.domain, origin)) return jsonResponse({ error: "This domain is not connected to the project." }, null, 403);
+    if (!originAllowed(project, origin)) return jsonResponse({ error: "This domain is not connected to the project." }, null, 403);
 
     await publishDueReviews(project.id);
     const url = new URL(request.url);
@@ -143,7 +129,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const origin = request.headers.get("origin");
   const project = await getProject(id);
   if (!project) return jsonResponse({ error: "Project not found." }, origin, 404);
-  if (!originAllowed(project.domain, origin)) return jsonResponse({ error: "This domain is not connected to the project." }, null, 403);
+  if (!originAllowed(project, origin)) return jsonResponse({ error: "This domain is not connected to the project." }, null, 403);
 
   let body: Record<string, unknown>;
   try {

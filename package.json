@@ -6,7 +6,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check:domains": "node scripts/check-widget-domains.cjs",
+    "check:ui": "node scripts/check-reputation-ui.cjs",
+    "check:html": "node scripts/check-html-prototype.cjs",
+    "check": "npm run check:domains && npm run check:ui && npm run check:html"
   },
   "dependencies": {
     "@playwright/test": "^1.63.0",
@@ -24,8 +28,10 @@
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "drizzle-kit": "0.31.10",
+    "esbuild": "0.25.12",
     "eslint": "9.39.4",
     "eslint-config-next": "16.2.6",
+    "jsdom": "30.1.2",
     "postcss": "8.5.8",
     "tailwindcss": "4.1.17",
     "typescript": "5.9.3"

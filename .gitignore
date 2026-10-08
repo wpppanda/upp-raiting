@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+build/
+next-env.d.ts
+tsconfig.tsbuildinfo
+
+# Local validation artifacts (screenshots, bundles)
+.validation/
+
+# Environment
+.env
+.env*.local
+
+# The upstream template does not track a lockfile
+package-lock.json
