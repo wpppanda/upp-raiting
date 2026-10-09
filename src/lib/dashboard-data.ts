@@ -83,6 +83,9 @@ export type DashboardProject = {
   allowPhotos: boolean;
   maxPhotos: number;
   maxPhotoSizeKb: number;
+  formShowEmail: boolean;
+  formShowCity: boolean;
+  formShowComment: boolean;
   formFields: CustomFormField[];
   badgeFormat: string;
   publicShowCity: boolean;
@@ -335,6 +338,9 @@ function ensureSchema(): Promise<void> {
       sql`alter table "reviews" add column if not exists "custom_fields" jsonb not null default '[]'::jsonb`,
       sql`alter table "projects" add column if not exists "form_fields" jsonb not null default '[]'::jsonb`,
       sql`alter table "projects" add column if not exists "badge_format" varchar(16) not null default 'full'`,
+      sql`alter table "projects" add column if not exists "form_show_email" boolean not null default true`,
+      sql`alter table "projects" add column if not exists "form_show_city" boolean not null default true`,
+      sql`alter table "projects" add column if not exists "form_show_comment" boolean not null default true`,
     ];
     for (const statement of statements) {
       try {

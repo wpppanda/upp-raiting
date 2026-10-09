@@ -226,13 +226,14 @@ const bodyText = () => doc.body.textContent;
   await click(byText(".rep-navigation button", "Review form"));
   check("the review form page configures photos", /Allow photos in reviews/.test(bodyText()) && /Photos per review/.test(bodyText()) && /Maximum photo size, KB/.test(bodyText()));
   const footerButtons = Array.prototype.slice.call(doc.querySelectorAll(".rep-footer-actions button")).map((button) => button.textContent.trim());
-  check("widget preview sits next to Save changes", footerButtons.indexOf("Widget preview") !== -1 && footerButtons[footerButtons.length - 1] === "Save changes");
+  check("preview & insert sits next to Save changes", footerButtons.indexOf("Preview & insert") !== -1 && footerButtons[footerButtons.length - 1] === "Save changes");
+  check("the review form exposes standard-field toggles", /Show the email field/.test(bodyText()) && /Show the city field/.test(bodyText()) && /Show the comment field/.test(bodyText()));
   const allowPhotos = doc.querySelector('[aria-label="Allow photos in reviews"][role="switch"]');
   await click(allowPhotos);
   check("photos can be turned off", allowPhotos.getAttribute("aria-checked") === "false" && /Photo attachments are disabled/.test(bodyText()));
   await click(allowPhotos);
 
-  await click(Array.prototype.slice.call(doc.querySelectorAll(".rep-footer-actions button")).filter((button) => button.textContent.indexOf("Widget preview") !== -1)[0]);
+  await click(Array.prototype.slice.call(doc.querySelectorAll(".rep-footer-actions button")).filter((button) => button.textContent.indexOf("Preview & insert") !== -1)[0]);
   await flush();
   const previewDialog = doc.querySelector("dialog.side-panel[open]");
   check("the preview shows the embed code on normal tabs", Array.prototype.slice.call(previewDialog.querySelectorAll("pre")).some((pre) => pre.textContent.indexOf("widget.js") !== -1));
@@ -242,8 +243,16 @@ const bodyText = () => doc.body.textContent;
   const afterDialog = doc.querySelector("dialog.side-panel[open]");
   check("the after-submission screen hides the embed code", !Array.prototype.slice.call(afterDialog.querySelectorAll("pre")).some((pre) => pre.textContent.indexOf("widget.js") !== -1));
   check("the after-submission screen still lists the allowed domains", /Allowed domains:/.test(afterDialog.textContent));
+  check("the after-submission screen has no copy-code footer", !Array.prototype.slice.call(afterDialog.querySelectorAll("button")).some((button) => /Copy embed code/.test(button.textContent)));
   await click(afterDialog.querySelector(".panel-close"));
   await sleep(260);
+
+  // Installation lives in the hub menu right after Queue.
+  const hubNavOrder = Array.prototype.slice.call(doc.querySelectorAll(".rep-navigation button")).map((button) => button.textContent.trim());
+  check("the hub menu has Installation right after Queue", hubNavOrder.indexOf("Installation") === hubNavOrder.indexOf("Queue") + 1);
+  await click(byText(".rep-navigation button", "Installation"));
+  check("the installation section shows the embed code", /widget\.js/.test(bodyText()) && /data-project-id="9f1c2a44/.test(bodyText()));
+  check("the installation section lists domains and the checklist", /Allowed domains:/.test(bodyText()) && /private window/.test(bodyText()) && /Content-Security-Policy/.test(bodyText()));
 
   // Badge page with five variants and its own settings.
   await click(doc.querySelector('button[title="Rating badge"]'));

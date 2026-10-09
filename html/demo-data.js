@@ -64,6 +64,9 @@
     allowPhotos: true,
     maxPhotos: 3,
     maxPhotoSizeKb: 400,
+    formShowEmail: true,
+    formShowCity: true,
+    formShowComment: true,
     formFields: [
       { id: "cf-visit", label: "What did you order?", type: "select", options: ["Coffee", "Breakfast", "Dessert"], required: false, showPublic: true },
       { id: "cf-table", label: "Table number", type: "text", options: [], required: false, showPublic: false }

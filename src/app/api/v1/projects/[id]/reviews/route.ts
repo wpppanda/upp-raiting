@@ -97,6 +97,9 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
           allowPhotos: project.allowPhotos,
           maxPhotos: project.maxPhotos,
           maxPhotoSizeKb: project.maxPhotoSizeKb,
+          showEmail: project.formShowEmail,
+          showCity: project.formShowCity,
+          showComment: project.formShowComment,
           customFields: (project.formFields ?? []).map((field) => ({
             id: field.id, label: field.label, type: field.type, options: field.options, required: field.required,
           })),

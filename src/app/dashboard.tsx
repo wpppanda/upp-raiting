@@ -2126,7 +2126,7 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
                       onClick={() => { setPreviewProject(null); setPreviewKind("form"); setPreviewOpen(true); }}
                       className="px-6 py-3 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg font-semibold text-sm transition-colors"
                     >
-                      Widget preview
+                      Preview &amp; insert
                     </button>
                   </div>
                 </div>
@@ -2312,21 +2312,25 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
                         className="w-full border border-slate-200 rounded-lg p-2 text-xs"
                         required
                       />
-                      <input
-                        type="email"
-                        placeholder="Email (optional)"
-                        value={newAuthorEmail}
-                        onChange={(e) => setNewAuthorEmail(e.target.value)}
-                        className="w-full border border-slate-200 rounded-lg p-2 text-xs"
-                      />
-                      <textarea
-                        placeholder="Tell us more (optional)"
-                        value={newContent}
-                        onChange={(e) => setNewContent(e.target.value)}
-                        rows={3}
-                        maxLength={2000}
-                        className="w-full border border-slate-200 rounded-lg p-2 text-xs"
-                      />
+                      {data.project.formShowEmail !== false && (
+                        <input
+                          type="email"
+                          placeholder="Email (optional)"
+                          value={newAuthorEmail}
+                          onChange={(e) => setNewAuthorEmail(e.target.value)}
+                          className="w-full border border-slate-200 rounded-lg p-2 text-xs"
+                        />
+                      )}
+                      {data.project.formShowComment !== false && (
+                        <textarea
+                          placeholder="Tell us more (optional)"
+                          value={newContent}
+                          onChange={(e) => setNewContent(e.target.value)}
+                          rows={3}
+                          maxLength={2000}
+                          className="w-full border border-slate-200 rounded-lg p-2 text-xs"
+                        />
+                      )}
                       {customFieldsUI(true)}
                       {photoRules.allowPhotos && photoField(true)}
                       <button
@@ -2513,7 +2517,7 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
                     type="button"
                     onClick={() => { setPreviewProject(null); setPreviewKind(installKind); setPreviewOpen(true); }}
                     className="shrink-0 px-4 py-2 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg text-xs font-semibold transition-colors"
-                  >Widget preview</button>
+                  >Preview &amp; insert</button>
                 </div>
               </div>
 
@@ -2580,7 +2584,7 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
                     type="button"
                     onClick={() => { setPreviewProject(null); setPreviewKind(installKind); setPreviewOpen(true); }}
                     className="mt-3 px-4 py-2 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg text-xs font-semibold transition-colors"
-                  >Open the widget preview</button>
+                  >Open preview &amp; insert</button>
                 </section>
 
                 <section className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm" aria-label="Troubleshooting">
@@ -2736,16 +2740,22 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
                 </label>
                 <input type="text" required placeholder={newAuthorKind === "employee" ? "For example, Maria (manager)" : "For example, Alex P."} value={newAuthorName} onChange={(e) => setNewAuthorName(e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800" />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Email</label>
-                  <input type="email" placeholder="alex@example.com" value={newAuthorEmail} onChange={(e) => setNewAuthorEmail(e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800" />
+              {(data.project.formShowEmail !== false || data.project.formShowCity !== false) && (
+                <div className="grid grid-cols-2 gap-3">
+                  {data.project.formShowEmail !== false && (
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Email</label>
+                      <input type="email" placeholder="alex@example.com" value={newAuthorEmail} onChange={(e) => setNewAuthorEmail(e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800" />
+                    </div>
+                  )}
+                  {data.project.formShowCity !== false && (
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">City</label>
+                      <input type="text" placeholder="Amsterdam" value={newAuthorCity} onChange={(e) => setNewAuthorCity(e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800" />
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">City</label>
-                  <input type="text" placeholder="Amsterdam" value={newAuthorCity} onChange={(e) => setNewAuthorCity(e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800" />
-                </div>
-              </div>
+              )}
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Rating *</label>
                 <div className="flex items-center gap-2">
@@ -2755,10 +2765,12 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
                   <span className="text-xs text-slate-500 ml-2">({newRating} out of 5)</span>
                 </div>
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Review text <span className="font-normal text-slate-400">(optional)</span></label>
-                <textarea rows={4} maxLength={2000} placeholder="Describe the customer experience (optional)…" value={newContent} onChange={(e) => setNewContent(e.target.value)} className="w-full border border-slate-200 rounded-lg p-3 text-sm text-slate-800" />
-              </div>
+              {data.project.formShowComment !== false && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Review text <span className="font-normal text-slate-400">(optional)</span></label>
+                  <textarea rows={4} maxLength={2000} placeholder="Describe the customer experience (optional)…" value={newContent} onChange={(e) => setNewContent(e.target.value)} className="w-full border border-slate-200 rounded-lg p-3 text-sm text-slate-800" />
+                </div>
+              )}
               {customFieldsUI(false)}
               {photoRules.allowPhotos
                 ? photoField(false)

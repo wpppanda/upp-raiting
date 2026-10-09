@@ -113,6 +113,17 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   await sleep(40);
   check("the feed shows the public custom answer", /What did you order\?: Coffee/.test(feed.window.document.body.textContent));
 
+  // Standard fields can be hidden from the form.
+  const hidden = boot('<div data-widget="form"></div>');
+  hidden.window.__payload = payload({ allowAnonymousReviews: false, reviewTextRequired: false, minReviewLength: 10, allowPhotos: false, showEmail: false, showCity: false, showComment: false, customFields: [] }, []);
+  hidden.window.eval(widgetSource);
+  await sleep(40);
+  const hiddenDoc = hidden.window.document;
+  check("hiding email removes the email input", !hiddenDoc.querySelector("input[name='authorEmail']"));
+  check("hiding city removes the city input", !hiddenDoc.querySelector("input[name='authorCity']"));
+  check("hiding the comment removes the textarea", !hiddenDoc.querySelector("textarea[name='content']"));
+  check("name and rating stay in the form", !!hiddenDoc.querySelector("input[name='authorName']") && hiddenDoc.querySelectorAll(".ow-rating-choice").length === 5);
+
   console.log("\nOK — " + checks + " checks passed.");
 })().catch((error) => {
   console.error(error && error.stack ? error.stack : error);

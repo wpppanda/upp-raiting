@@ -113,6 +113,10 @@ export const projects = pgTable("projects", {
   allowPhotos: boolean("allow_photos").notNull().default(true),
   maxPhotos: integer("max_photos").notNull().default(DEFAULT_MAX_PHOTOS),
   maxPhotoSizeKb: integer("max_photo_size_kb").notNull().default(DEFAULT_MAX_PHOTO_SIZE_KB),
+  /** Which standard fields the review form shows (name is always required). */
+  formShowEmail: boolean("form_show_email").notNull().default(true),
+  formShowCity: boolean("form_show_city").notNull().default(true),
+  formShowComment: boolean("form_show_comment").notNull().default(true),
   /** Extra fields the review form asks for, in the order they were created. */
   formFields: jsonb("form_fields").$type<CustomFormField[]>().notNull().default([]),
   /** Default rating-badge variant (see the Badge page). */

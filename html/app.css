@@ -887,6 +887,9 @@
   .border-\[\#a7c3e9\] {
     border-color: #a7c3e9;
   }
+  .border-\[\#c9e9d7\] {
+    border-color: #c9e9d7;
+  }
   .border-\[\#d0d5dd\] {
     border-color: #d0d5dd;
   }
@@ -1030,6 +1033,9 @@
   }
   .bg-\[\#f0f5fc\] {
     background-color: #f0f5fc;
+  }
+  .bg-\[\#f0faf5\] {
+    background-color: #f0faf5;
   }
   .bg-\[\#f1f5fb\] {
     background-color: #f1f5fb;
@@ -1524,6 +1530,9 @@
   }
   .text-\[\#17865e\] {
     color: #17865e;
+  }
+  .text-\[\#33976b\] {
+    color: #33976b;
   }
   .text-\[\#58779f\] {
     color: #58779f;
@@ -3140,6 +3149,30 @@
   .rep-switch-thumb, .rep-switch-track {
     transition: none;
   }
+}
+.rep-embed-pre {
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  border-radius: 6px;
+  background: #1e293b;
+  padding: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  color: #e2e8f0;
+}
+.rep-install-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #555;
+}
+.rep-install-list strong {
+  color: #333;
 }
 @font-face {
   font-family: "Montserrat";

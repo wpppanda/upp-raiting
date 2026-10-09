@@ -467,24 +467,34 @@
     nameField.maxLength = 120;
     nameField.required = true;
     form.appendChild(nameField);
-    var emailField = element("input", "ow-field");
-    emailField.name = "authorEmail";
-    emailField.type = "email";
-    emailField.placeholder = "Email address (optional)";
-    emailField.maxLength = 254;
-    form.appendChild(emailField);
-    var cityField = element("input", "ow-field");
-    cityField.name = "authorCity";
-    cityField.type = "text";
-    cityField.placeholder = "City (optional)";
-    cityField.maxLength = 120;
-    form.appendChild(cityField);
-    var commentField = element("textarea", "ow-field");
-    commentField.name = "content";
-    commentField.placeholder = textRequired ? "Tell us what you enjoyed or how we could improve…" : "Tell us more (optional)";
-    commentField.maxLength = 2000;
-    commentField.required = textRequired;
-    form.appendChild(commentField);
+    // Standard fields can be hidden in Business reputation → Review form.
+    var emailField = null;
+    if (config.showEmail !== false) {
+      emailField = element("input", "ow-field");
+      emailField.name = "authorEmail";
+      emailField.type = "email";
+      emailField.placeholder = "Email address (optional)";
+      emailField.maxLength = 254;
+      form.appendChild(emailField);
+    }
+    var cityField = null;
+    if (config.showCity !== false) {
+      cityField = element("input", "ow-field");
+      cityField.name = "authorCity";
+      cityField.type = "text";
+      cityField.placeholder = "City (optional)";
+      cityField.maxLength = 120;
+      form.appendChild(cityField);
+    }
+    var commentField = null;
+    if (config.showComment !== false) {
+      commentField = element("textarea", "ow-field");
+      commentField.name = "content";
+      commentField.placeholder = textRequired ? "Tell us what you enjoyed or how we could improve…" : "Tell us more (optional)";
+      commentField.maxLength = 2000;
+      commentField.required = textRequired;
+      form.appendChild(commentField);
+    }
 
     var photoField = config.allowPhotos === true ? renderPhotoField(config) : null;
     if (photoField) form.appendChild(photoField.node);
@@ -548,7 +558,7 @@
     form.addEventListener("submit", function (event) {
       event.preventDefault();
       message.classList.remove("error");
-      var comment = commentField.value.trim();
+      var comment = commentField ? commentField.value.trim() : "";
       if (selectedRating === null) {
         message.textContent = "Choose a rating to continue.";
         message.classList.add("error");
@@ -567,8 +577,8 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           authorName: nameField.value.trim(),
-          authorEmail: emailField.value.trim(),
-          authorCity: cityField.value.trim(),
+          authorEmail: emailField ? emailField.value.trim() : "",
+          authorCity: cityField ? cityField.value.trim() : "",
           isAnonymous: anonymousField ? anonymousField.checked : false,
           rating: selectedRating,
           content: comment,

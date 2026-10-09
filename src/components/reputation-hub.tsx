@@ -11,7 +11,7 @@ import { MAX_PHOTOS_LIMIT, MAX_PHOTO_SIZE_LIMIT_KB } from "@/lib/photo-upload";
 import { MAX_ALLOWED_DOMAINS } from "@/lib/widget-domains";
 
 type Sentiment = "positive" | "neutral" | "negative";
-type SectionKey = "reviews" | "form" | "reminders" | "queue" | "protection";
+type SectionKey = "reviews" | "form" | "reminders" | "queue" | "install" | "protection";
 type ReminderUnit = "minutes" | "hours" | "days" | "weeks";
 
 const MENU: Array<{ id: SectionKey; label: string }> = [
@@ -20,12 +20,14 @@ const MENU: Array<{ id: SectionKey; label: string }> = [
   { id: "form", label: "Review form" },
   { id: "reminders", label: "Reminders" },
   { id: "queue", label: "Queue" },
+  { id: "install", label: "Installation" },
 ];
 const PAGE_COPY: Record<SectionKey, { title: string; description: string }> = {
   reviews: { title: "Reviews", description: "Choose how customer reviews are classified, published, and answered." },
   form: { title: "Review form", description: "Set up the form customers fill in: photos, required fields, and privacy options." },
   reminders: { title: "Reminders", description: "Set up automatic review invitations after a customer visit or order." },
   queue: { title: "Publication queue", description: "Control publication limits and priority rules for queued reviews." },
+  install: { title: "Installation", description: "How to add the widget to your website: domains, code, and verification." },
   protection: { title: "Protection & Settings", description: "Control the widget domains, public widget fields, form privacy, Google reviews, and spam filters." },
 };
 const COLORS = {
@@ -212,6 +214,7 @@ export default function ReputationHub({ project, onSaved, onToast, onPreview }: 
   const [units, setUnits] = useState<Record<string, ReminderUnit>>(() => Object.fromEntries(project.reminders.map(item => [item.id, inferUnit(item.delayMinutes)])));
   const [editingId, setEditingId] = useState<string | null>(null);
   const [messageDraft, setMessageDraft] = useState("");
+  const [embedCopied, setEmbedCopied] = useState(false);
 
   useEffect(() => { setForm(project); }, [project]);
   const dirty = useMemo(() => JSON.stringify(form) !== JSON.stringify(project), [form, project]);
@@ -366,10 +369,13 @@ export default function ReputationHub({ project, onSaved, onToast, onPreview }: 
       </Section>
       <Section title="Form fields" description="Control what customers can submit through your widget.">
         <SwitchRow label="Allow anonymous reviews" checked={form.allowAnonymousReviews} onChange={value => set("allowAnonymousReviews", value)} help="The company keeps the submitted details in the admin panel, while the public review is shown as Anonymous." />
+        <SwitchRow label="Show the email field" checked={form.formShowEmail} onChange={value => set("formShowEmail", value)} help="Hide it to collect only a name and a rating; the email stays optional when shown." />
+        <SwitchRow label="Show the city field" checked={form.formShowCity} onChange={value => set("formShowCity", value)} help="Turn off to stop asking customers for their city." />
+        <SwitchRow label="Show the comment field" checked={form.formShowComment} onChange={value => set("formShowComment", value)} help="Turn off to accept a rating without a text box. “Require written review text” then has no effect." />
         <SwitchRow label="Require written review text" checked={form.reviewTextRequired} onChange={value => set("reviewTextRequired", value)} help="When off, customers can submit only a star rating. Any non-empty comment still follows the minimum length below." />
         <SettingRow label="Minimum review length" htmlFor="rep-min-length" hint={form.reviewTextRequired ? "Required comments must meet this length." : "Optional comments must meet this length when provided."}><input id="rep-min-length" type="number" min={0} max={2000} className="rep-input short" value={form.minReviewLength} onChange={event => set("minReviewLength", Number(event.target.value))} /></SettingRow>
         <SettingRow label="Preview and install" help="Check how the form looks on your website and copy the embed code.">
-          <button type="button" className="rep-link" onClick={() => onPreview(form)}>Open the widget preview →</button>
+          <button type="button" className="rep-link" onClick={() => onPreview(form)}>Open preview &amp; insert →</button>
         </SettingRow>
       </Section>
     </>;
@@ -419,6 +425,43 @@ export default function ReputationHub({ project, onSaved, onToast, onPreview }: 
     </>;
   }
 
+  function installSettings() {
+    const domains = [form.domain, ...(form.allowedDomains ?? []).filter(Boolean)];
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const snippet = `<script src="${origin}/widget.js" data-project-id="${form.id}" defer></script>\n<div data-widget="reviews" data-limit="6" data-show-response="true"></div>`;
+    return <>
+      <Section title="Allow your domains" description="The widget only loads on the domains connected to the project.">
+        <div className="flex flex-wrap gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-lg border border-[#c9e9d7] bg-[#f0faf5] px-2.5 py-1.5 text-xs text-[#33976b]">{form.domain}<span className="text-[10px] font-semibold uppercase">primary</span></span>
+          {(form.allowedDomains ?? []).filter(Boolean).map((domain) => <span key={domain} className="inline-flex items-center rounded-lg border border-[#e4e7ec] bg-white px-2.5 py-1.5 text-xs text-slate-700">{domain}</span>)}
+        </div>
+        <button type="button" className="rep-link mt-3" onClick={() => setSection("protection")}>Manage domains in Protection &amp; Settings →</button>
+      </Section>
+      <Section title="Paste the code" description="Add both lines before the closing body tag of your page template.">
+        <pre className="rep-embed-pre">{snippet}</pre>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <button type="button" className="rep-button" onClick={() => { void navigator.clipboard.writeText(snippet).then(() => { setEmbedCopied(true); window.setTimeout(() => setEmbedCopied(false), 2000); }); }}>{embedCopied ? "✓ Copied" : "Copy code"}</button>
+          <button type="button" className="rep-button quiet" onClick={() => onPreview(form)}>Open preview &amp; insert</button>
+        </div>
+        <p className="rep-settings-note">Allowed domains: {domains.join(", ")}. Add as many div blocks as you need — one per widget.</p>
+      </Section>
+      <Section title="Verify the result" description="A quick checklist after publishing the page.">
+        <ol className="rep-install-list">
+          <li>Publish the page and open it in a private window without cache.</li>
+          <li>Submit a test review — it lands in Moderation or the queue by your rules.</li>
+          <li>Check the thank-you screen for positive, neutral, and negative ratings.</li>
+        </ol>
+      </Section>
+      <Section title="If the widget does not appear" description="The usual causes and fixes.">
+        <ul className="rep-install-list">
+          <li><strong>“This domain is not connected to the project.”</strong> — add the page domain above.</li>
+          <li><strong>Script blocked</strong> — allow the domain in your Content-Security-Policy (script-src and connect-src).</li>
+          <li><strong>Empty feed</strong> — only published reviews are shown; approve one in Moderation.</li>
+        </ul>
+      </Section>
+    </>;
+  }
+
   function protectionSettings() {
     return <>
       <Section title="Widget domains" description="The widget only loads on the primary domain and on the extra domains you allow here.">
@@ -458,7 +501,7 @@ export default function ReputationHub({ project, onSaved, onToast, onPreview }: 
   }
 
   return <div className="reputation-ref">
-    <div className="rep-top"><h1>Business reputation</h1><div className="rep-top-actions"><button type="button" className="rep-button small quiet" onClick={() => onPreview(form)}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></svg>Widget preview</button></div></div>
+    <div className="rep-top"><h1>Business reputation</h1><div className="rep-top-actions"><button type="button" className="rep-button small quiet" onClick={() => onPreview(form)}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></svg>Preview &amp; insert</button></div></div>
     <div className="rep-layout">
       <nav className="rep-navigation" aria-label="Business reputation sections">{MENU.map(item => <button type="button" key={item.id} aria-current={section === item.id ? "page" : undefined} onClick={() => setSection(item.id)}>{item.label}</button>)}</nav>
       <div className="rep-sheet">
@@ -467,8 +510,9 @@ export default function ReputationHub({ project, onSaved, onToast, onPreview }: 
         {section === "form" && formSettings()}
         {section === "reminders" && reminderSettings()}
         {section === "queue" && queueSettings()}
+        {section === "install" && installSettings()}
         {section === "protection" && protectionSettings()}
-        <div className="rep-footer"><span aria-live="polite">{dirty ? "You have unsaved changes" : "All settings are up to date"}</span><div className="rep-footer-actions"><button type="button" className="rep-button quiet" onClick={() => onPreview(form)}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></svg>Widget preview</button>{dirty && <button type="button" className="rep-button quiet" disabled={saving} onClick={() => { setForm(project); setUnits(Object.fromEntries(project.reminders.map(item => [item.id, inferUnit(item.delayMinutes)]))); }}>Discard changes</button>}<button type="button" className="rep-button primary" disabled={saving || !dirty} onClick={() => void save()}>{saving ? "Saving…" : "Save changes"}</button></div></div>
+        <div className="rep-footer"><span aria-live="polite">{dirty ? "You have unsaved changes" : "All settings are up to date"}</span><div className="rep-footer-actions"><button type="button" className="rep-button quiet" onClick={() => onPreview(form)}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></svg>Preview &amp; insert</button>{dirty && <button type="button" className="rep-button quiet" disabled={saving} onClick={() => { setForm(project); setUnits(Object.fromEntries(project.reminders.map(item => [item.id, inferUnit(item.delayMinutes)]))); }}>Discard changes</button>}<button type="button" className="rep-button primary" disabled={saving || !dirty} onClick={() => void save()}>{saving ? "Saving…" : "Save changes"}</button></div></div>
       </div>
     </div>
     <SidePanel open={!!editingReminder} onClose={() => setEditingId(null)} title="Edit reminder message" subtitle="Write the message customers will receive." closeLabel="Close message editor" width={480} footer={<div className="rep-message-footer"><button type="button" className="rep-button quiet" onClick={() => setEditingId(null)}>Cancel</button><button type="button" className="rep-button primary" disabled={!messageDraft.trim()} onClick={() => { if (editingReminder) updateReminder(editingReminder.id, { message: messageDraft.trim() }); setEditingId(null); }}>Save message</button></div>}>
