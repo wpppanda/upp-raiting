@@ -324,30 +324,35 @@ export default function ReputationHub({ project, onSaved, onToast, onPreview }: 
             {fields.length === 0 && <p className="rep-settings-note">No custom fields yet. Add a question to collect extra details from customers.</p>}
             <div className="space-y-3">
               {fields.map((field, index) => (
-                <div key={field.id} className="rounded-lg border border-[#e4e7ec] p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] font-semibold text-slate-500">Field {index + 1}</span>
-                    <button type="button" className="rep-button small quiet" onClick={() => remove(field.id)}>Remove</button>
+                <div key={field.id} className="rounded-lg border border-[#e4e7ec] bg-white p-3">
+                  <div className="flex items-center justify-between gap-2 border-b border-[#f2f4f7] pb-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Field {index + 1}</span>
+                    <button type="button" className="rep-table-delete" title="Remove field" aria-label={`Remove field ${index + 1}`} onClick={() => remove(field.id)}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 11v6M14 11v6" /></svg>
+                    </button>
                   </div>
-                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                    <SettingRow label="Label" htmlFor={`rep-ff-label-${field.id}`}>
-                      <input id={`rep-ff-label-${field.id}`} className="rep-input" maxLength={80} value={field.label} onChange={event => update(field.id, { label: event.target.value })} />
-                    </SettingRow>
-                    <SettingRow label="Type" htmlFor={`rep-ff-type-${field.id}`}>
-                      <select id={`rep-ff-type-${field.id}`} className="rep-select medium" value={field.type} onChange={event => update(field.id, { type: event.target.value as CustomFormField["type"], options: event.target.value === "select" && field.options.length < 2 ? ["Option 1", "Option 2"] : field.options })}>
+                  <div className="mt-2 grid items-end gap-2 sm:grid-cols-[1fr_150px]">
+                    <label className="block">
+                      <span className="mb-1 block text-[11px] font-medium text-slate-600">Label</span>
+                      <input className="rep-input" maxLength={80} placeholder="For example: Table number" value={field.label} onChange={event => update(field.id, { label: event.target.value })} />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-[11px] font-medium text-slate-600">Type</span>
+                      <select className="rep-select medium" value={field.type} onChange={event => update(field.id, { type: event.target.value as CustomFormField["type"], options: event.target.value === "select" && field.options.length < 2 ? ["Option 1", "Option 2"] : field.options })}>
                         <option value="text">Text</option>
                         <option value="select">Select</option>
                       </select>
-                    </SettingRow>
+                    </label>
                   </div>
                   {field.type === "select" && (
-                    <SettingRow label="Options" htmlFor={`rep-ff-options-${field.id}`} hint="Separate options with commas (2–20)." className="mt-1">
-                      <input id={`rep-ff-options-${field.id}`} className="rep-input" value={field.options.join(", ")} onChange={event => update(field.id, { options: event.target.value.split(",").map(option => option.trim()).filter(Boolean).slice(0, 20) })} />
-                    </SettingRow>
+                    <label className="mt-2 block">
+                      <span className="mb-1 block text-[11px] font-medium text-slate-600">Options <span className="font-normal text-slate-400">· comma separated, 2–20</span></span>
+                      <input className="rep-input" value={field.options.join(", ")} onChange={event => update(field.id, { options: event.target.value.split(",").map(option => option.trim()).filter(Boolean).slice(0, 20) })} />
+                    </label>
                   )}
-                  <div className="mt-2 flex flex-wrap gap-4">
-                    <SwitchRow label="Required" checked={field.required} onChange={value => update(field.id, { required: value })} />
-                    <SwitchRow label="Show in the public feed" checked={field.showPublic} onChange={value => update(field.id, { showPublic: value })} />
+                  <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2">
+                    <span className="flex items-center gap-2 text-[11px] font-medium text-slate-600">Required <Switch label={`Field ${index + 1} required`} checked={field.required} onChange={value => update(field.id, { required: value })} /></span>
+                    <span className="flex items-center gap-2 text-[11px] font-medium text-slate-600">Show in the public feed <Switch label={`Field ${index + 1} public`} checked={field.showPublic} onChange={value => update(field.id, { showPublic: value })} /></span>
                   </div>
                 </div>
               ))}

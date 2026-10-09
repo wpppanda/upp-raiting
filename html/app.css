@@ -751,8 +751,14 @@
   .gap-x-3 {
     column-gap: calc(var(--spacing) * 3);
   }
+  .gap-x-6 {
+    column-gap: calc(var(--spacing) * 6);
+  }
   .gap-y-1 {
     row-gap: calc(var(--spacing) * 1);
+  }
+  .gap-y-2 {
+    row-gap: calc(var(--spacing) * 2);
   }
   .divide-y {
     :where(& > :not(:last-child)) {
@@ -1459,8 +1465,14 @@
   .break-words {
     overflow-wrap: break-word;
   }
+  .break-all {
+    word-break: break-all;
+  }
   .whitespace-nowrap {
     white-space: nowrap;
+  }
+  .whitespace-pre-wrap {
+    white-space: pre-wrap;
   }
   .text-\[\#0E703C\] {
     color: #0E703C;
@@ -1930,6 +1942,11 @@
   .sm\:grid-cols-4 {
     @media (width >= 40rem) {
       grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+  .sm\:grid-cols-\[1fr_150px\] {
+    @media (width >= 40rem) {
+      grid-template-columns: 1fr 150px;
     }
   }
   .sm\:flex-row {

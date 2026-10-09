@@ -235,9 +235,14 @@ const bodyText = () => doc.body.textContent;
   await click(Array.prototype.slice.call(doc.querySelectorAll(".rep-footer-actions button")).filter((button) => button.textContent.indexOf("Widget preview") !== -1)[0]);
   await flush();
   const previewDialog = doc.querySelector("dialog.side-panel[open]");
-  check("the widget preview no longer embeds a code box", !Array.prototype.slice.call(previewDialog.querySelectorAll("pre")).some((pre) => pre.textContent.indexOf("widget.js") !== -1));
-  check("the preview still lists the allowed domains", /Allowed domains:/.test(previewDialog.textContent) && /zerno\.coffee, shop\.zerno\.coffee, \*\.zerna\.app/.test(previewDialog.textContent));
-  await click(previewDialog.querySelector(".panel-close"));
+  check("the preview shows the embed code on normal tabs", Array.prototype.slice.call(previewDialog.querySelectorAll("pre")).some((pre) => pre.textContent.indexOf("widget.js") !== -1));
+  check("the preview lists the allowed domains", /Allowed domains:/.test(previewDialog.textContent) && /zerno\.coffee, shop\.zerno\.coffee, \*\.zerna\.app/.test(previewDialog.textContent));
+  await click(Array.prototype.slice.call(previewDialog.querySelectorAll('[role="tab"]')).filter((tab) => /After submission/.test(tab.textContent))[0]);
+  await flush();
+  const afterDialog = doc.querySelector("dialog.side-panel[open]");
+  check("the after-submission screen hides the embed code", !Array.prototype.slice.call(afterDialog.querySelectorAll("pre")).some((pre) => pre.textContent.indexOf("widget.js") !== -1));
+  check("the after-submission screen still lists the allowed domains", /Allowed domains:/.test(afterDialog.textContent));
+  await click(afterDialog.querySelector(".panel-close"));
   await sleep(260);
 
   // Badge page with five variants and its own settings.
@@ -250,13 +255,17 @@ const bodyText = () => doc.body.textContent;
   check("the badge embed snippet follows the selection", /data-widget="badge" data-format="banner"/.test(bodyText()));
 
   // Installation guide right after the publication queue.
-  await click(doc.querySelector('button[title="Install the widget on your website"]'));
+  await click(doc.querySelector('button[title="Install guide — add the widget to your site"]'));
   check("the install page opens from the sidebar", /Install the widget on your website/.test(bodyText()));
   check("the install page lists the allowed domains", /Allow your domain/.test(bodyText()) && /zerno\.coffee/.test(bodyText()) && /shop\.zerno\.coffee/.test(bodyText()));
   check("the install page shows the embed code", /widget\.js/.test(bodyText()) && /data-project-id="9f1c2a44/.test(bodyText()) && /data-widget="reviews"/.test(bodyText()));
   await click(Array.prototype.slice.call(doc.querySelectorAll('input[name="install-kind"]'))[1]);
   check("choosing a block changes the snippet", /data-widget="form"/.test(bodyText()));
   check("the install page explains failures and the API", /This domain is not connected to the project/.test(bodyText()) && /\/api\/v1\/projects\//.test(bodyText()));
+  await click(doc.querySelector('button[title="Widgets and embed code"]'));
+  check("the widgets page links to the installation guide", /Installation guide/.test(bodyText()));
+  await click(Array.prototype.slice.call(doc.querySelectorAll("button")).filter((button) => button.textContent.trim() === "Installation guide")[0]);
+  check("the labeled button opens the install page", /Install the widget on your website/.test(bodyText()));
 
   check("no runtime errors were thrown", errors.length === 0);
   if (errors.length) console.log(errors);
