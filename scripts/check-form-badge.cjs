@@ -104,6 +104,35 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   check("banner badge is the wide variant with count", !!banner && /4\.8/.test(banner.textContent) && /verified reviews/.test(banner.textContent));
   check("the badge falls back to the project default format", (bdoc.querySelectorAll(".ow-badge, .ow-badge-banner").length) === 5);
 
+  // Badge appearance settings: size, theme, shape, caption.
+  const styled = boot('<div data-widget="badge" id="b-styled"></div><div data-widget="badge" data-format="banner" id="b-styled-banner"></div>');
+  styled.window.__payload.badge = { format: "full", size: "large", theme: "dark", shape: "pill", showCount: true, label: "happy guests" };
+  styled.window.__payload.metrics.total = 7;
+  styled.window.eval(widgetSource);
+  await sleep(40);
+  const sdoc = styled.window.document;
+  const styledBadge = sdoc.querySelector("#b-styled .ow-badge");
+  check("the badge size adds its modifier class", !!styledBadge && styledBadge.classList.contains("ow-badge--large"));
+  check("the badge theme adds its modifier class", !!styledBadge && styledBadge.classList.contains("ow-badge--dark"));
+  check("the badge shape adds its modifier class", !!styledBadge && styledBadge.classList.contains("ow-badge--pill"));
+  check("a custom caption replaces the default word", !!styledBadge && /7 happy guests/.test(styledBadge.textContent));
+  const styledBanner = sdoc.querySelector("#b-styled-banner .ow-badge-banner");
+  check("the banner keeps its divider with a custom caption", !!styledBanner && !!styledBanner.querySelector(".ow-badge-divider") && /7 happy guests/.test(styledBanner.textContent));
+  check("the widget stylesheet defines the dark and brand themes", widgetSource.includes(".ow-badge--dark{") && widgetSource.includes(".ow-badge--brand{"));
+  check("the widget stylesheet defines the size modifiers", widgetSource.includes(".ow-badge--small{") && widgetSource.includes(".ow-badge--large{"));
+
+  const plain = boot('<div data-widget="badge" id="b-plain"></div><div data-widget="badge" data-format="banner" id="b-plain-banner"></div>');
+  plain.window.__payload.badge = { format: "full", size: "small", theme: "light", shape: "square", showCount: false, label: "" };
+  plain.window.__payload.metrics.total = 3;
+  plain.window.eval(widgetSource);
+  await sleep(40);
+  const pdoc = plain.window.document;
+  const plainBadge = pdoc.querySelector("#b-plain .ow-badge");
+  check("hiding the review count removes the caption", !!plainBadge && !plainBadge.querySelector(".ow-badge-caption"));
+  check("the defaults add only the non-default modifiers", !!plainBadge && plainBadge.classList.contains("ow-badge--small") && plainBadge.classList.contains("ow-badge--square") && !plainBadge.classList.contains("ow-badge--light"));
+  const plainBanner = pdoc.querySelector("#b-plain-banner .ow-badge-banner");
+  check("hiding the review count also cleans the banner", !!plainBanner && !plainBanner.querySelector(".ow-badge-caption") && !plainBanner.querySelector(".ow-badge-divider"));
+
   // The feed shows public custom answers and hides private ones.
   const feed = boot('<div data-widget="reviews"></div>');
   feed.window.__payload = payload({ allowPhotos: false, customFields: [] }, [

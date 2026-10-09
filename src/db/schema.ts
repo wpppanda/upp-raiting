@@ -34,6 +34,18 @@ export const MAX_CUSTOM_FIELDS = 6;
 export type BadgeFormat = "number" | "stars" | "full" | "stars-only" | "banner";
 export const BADGE_FORMATS: BadgeFormat[] = ["number", "stars", "full", "stars-only", "banner"];
 
+/** How large the badge renders. */
+export type BadgeSize = "small" | "medium" | "large";
+export const BADGE_SIZES: BadgeSize[] = ["small", "medium", "large"];
+
+/** Light = white card, dark = near-black card, brand = filled with the brand colour. */
+export type BadgeTheme = "light" | "dark" | "brand";
+export const BADGE_THEMES: BadgeTheme[] = ["light", "dark", "brand"];
+
+/** Corner treatment. */
+export type BadgeShape = "rounded" | "pill" | "square";
+export const BADGE_SHAPES: BadgeShape[] = ["rounded", "pill", "square"];
+
 export type NotifyChannelKey = "email" | "whatsapp" | "sms";
 export type NotifyChannels = Record<NotifyChannelKey, { enabled: boolean; value: string }>;
 export const defaultNotifyChannels: NotifyChannels = {
@@ -121,6 +133,12 @@ export const projects = pgTable("projects", {
   formFields: jsonb("form_fields").$type<CustomFormField[]>().notNull().default([]),
   /** Default rating-badge variant (see the Badge page). */
   badgeFormat: varchar("badge_format", { length: 16 }).notNull().default("full"),
+  /** Appearance of the badge: size, theme, shape, whether the count and which caption show. */
+  badgeSize: varchar("badge_size", { length: 8 }).notNull().default("medium"),
+  badgeTheme: varchar("badge_theme", { length: 8 }).notNull().default("light"),
+  badgeShape: varchar("badge_shape", { length: 8 }).notNull().default("rounded"),
+  badgeShowCount: boolean("badge_show_count").notNull().default(true),
+  badgeLabel: varchar("badge_label", { length: 64 }).notNull().default(""),
   publicShowCity: boolean("public_show_city").notNull().default(false),
   publicShowDate: boolean("public_show_date").notNull().default(true),
   publicShowName: boolean("public_show_name").notNull().default(true),

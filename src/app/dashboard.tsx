@@ -15,13 +15,34 @@ import GoogleG from "@/components/google-g";
 export type { DashboardReview, DashboardProject, DashboardData };
 
 // --- Navigation Tabs & Subsections ---
-function BadgeSample({ format, score, count }: { format: string; score: string; count: number }) {
-  const stars = <span className="tracking-wider text-[#FBBC04]">★★★★★</span>;
-  if (format === "banner") return <div className="flex items-center gap-3 rounded-lg border border-slate-300 bg-white px-4 py-2.5"><span className="flex items-center gap-2"><strong className="text-lg text-slate-900">{score}</strong>{stars}</span><span className="h-6 w-px bg-slate-200" /><span className="text-xs text-slate-500">{count} verified reviews</span></div>;
-  if (format === "number") return <div className="inline-flex rounded-lg border border-slate-300 bg-white px-4 py-2"><strong className="text-lg text-slate-900">{score}</strong></div>;
-  if (format === "stars-only") return <div className="inline-flex rounded-lg border border-slate-300 bg-white px-4 py-2"><span className="text-[16px] tracking-[2px] text-[#FBBC04]">★★★★★</span></div>;
-  if (format === "stars") return <div className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2"><strong className="text-lg text-slate-900">{score}</strong>{stars}</div>;
-  return <div className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2"><strong className="text-lg text-slate-900">{score}</strong>{stars}<span className="text-xs text-slate-500">{count} reviews</span></div>;
+const BADGE_SIZE_META = [
+  { id: "small", name: "Small", padding: "6px 10px", gap: 6, score: 15, caption: 10, star: 12, bigStar: 15 },
+  { id: "medium", name: "Medium", padding: "10px 14px", gap: 9, score: 19, caption: 11, star: 14, bigStar: 19 },
+  { id: "large", name: "Large", padding: "15px 22px", gap: 13, score: 27, caption: 13, star: 18, bigStar: 26 },
+] as const;
+const BADGE_THEME_META = [
+  { id: "light", name: "Light", border: "#dadce0", background: "#ffffff", score: "#202124", caption: "#5f6368", divider: "#dadce0" },
+  { id: "dark", name: "Dark", border: "#5f6368", background: "#202124", score: "#ffffff", caption: "#bdc1c6", divider: "#5f6368" },
+  { id: "brand", name: "Brand", border: "transparent", background: "#617a58", score: "#ffffff", caption: "#ffffff", divider: "rgba(255,255,255,.45)" },
+] as const;
+const BADGE_SHAPE_META = [
+  { id: "rounded", name: "Rounded", radius: 10 },
+  { id: "pill", name: "Pill", radius: 999 },
+  { id: "square", name: "Square", radius: 3 },
+] as const;
+type BadgeLook = { size: string; theme: string; shape: string; showCount: boolean; label: string; brandColor: string };
+function BadgeSample({ format, score, count, look }: { format: string; score: string; count: number; look: BadgeLook }) {
+  const size = BADGE_SIZE_META.find(item => item.id === look.size) ?? BADGE_SIZE_META[1];
+  const theme = BADGE_THEME_META.find(item => item.id === look.theme) ?? BADGE_THEME_META[0];
+  const shape = BADGE_SHAPE_META.find(item => item.id === look.shape) ?? BADGE_SHAPE_META[0];
+  const word = look.label.trim() || (format === "banner" ? "verified reviews" : "reviews");
+  const shell: React.CSSProperties = { display: "inline-flex", alignItems: "center", gap: size.gap, padding: size.padding, border: `1px solid ${theme.border}`, borderRadius: shape.radius, background: theme.id === "brand" ? look.brandColor : theme.background };
+  const scoreStyle: React.CSSProperties = { color: theme.score, fontSize: size.score, fontWeight: 600, lineHeight: 1.15 };
+  const stars = <span className="tracking-wider" style={{ color: "#FBBC04", fontSize: size.star }}>★★★★★</span>;
+  const bigStars = <span style={{ color: "#FBBC04", fontSize: size.bigStar, letterSpacing: 2 }}>★★★★★</span>;
+  const caption = <span style={{ color: theme.caption, fontSize: size.caption }}>{count} {word}</span>;
+  if (format === "banner") return <div style={{ ...shell, display: "flex", width: "100%", maxWidth: 420 }} data-badge-preview={format}><span style={{ display: "inline-flex", alignItems: "center", gap: Math.max(5, size.gap - 2) }}><strong style={scoreStyle}>{score}</strong>{stars}</span>{look.showCount && <span aria-hidden="true" style={{ width: 1, alignSelf: "stretch", background: theme.divider }} />}{look.showCount && caption}</div>;
+  return <div style={shell} data-badge-preview={format}>{format !== "stars-only" && <strong style={scoreStyle}>{score}</strong>}{format !== "number" && (format === "stars-only" ? bigStars : stars)}{format === "full" && look.showCount && caption}</div>;
 }
 
 export type MainView =
@@ -290,6 +311,14 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
   const [newPhotoNote, setNewPhotoNote] = useState("");
   const [newCustom, setNewCustom] = useState<Record<string, string>>({});
   const [badgeSelection, setBadgeSelection] = useState<string>(initialData.project.badgeFormat || "full");
+  const [badgeLook, setBadgeLook] = useState<BadgeLook>({
+    size: initialData.project.badgeSize || "medium",
+    theme: initialData.project.badgeTheme || "light",
+    shape: initialData.project.badgeShape || "rounded",
+    showCount: initialData.project.badgeShowCount !== false,
+    label: initialData.project.badgeLabel || "",
+    brandColor: initialData.project.brandColor,
+  });
   const [photosBusy, setPhotosBusy] = useState(false);
 
   // Widget preview sandbox + right drawer
@@ -510,15 +539,31 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
 
   const saveBadgeFormat = async (format: string) => {
     setBadgeSelection(format);
+    await persistBadge({ badgeFormat: format }, "Badge kind saved.");
+  };
+
+  const persistBadge = async (patch: Record<string, unknown>, message: string) => {
     try {
-      const res = await fetch("/api/project", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ badgeFormat: format }) });
+      const res = await fetch("/api/project", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Unable to save the badge format.");
+      if (!res.ok) throw new Error(json.error || "Unable to save the badge settings.");
       setData((prev: DashboardData) => ({ ...prev, project: json.project }));
-      showToast("Badge format saved.");
+      showToast(message);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Unable to save the badge format.");
+      showToast(error instanceof Error ? error.message : "Unable to save the badge settings.");
     }
+  };
+
+  const updateBadgeLook = (patch: Partial<BadgeLook>, message: string) => {
+    setBadgeLook((current) => ({ ...current, ...patch }));
+    // The API expects the persisted column names, not the local preview keys.
+    const apiPatch: Record<string, unknown> = {};
+    if (patch.size !== undefined) apiPatch.badgeSize = patch.size;
+    if (patch.theme !== undefined) apiPatch.badgeTheme = patch.theme;
+    if (patch.shape !== undefined) apiPatch.badgeShape = patch.shape;
+    if (patch.showCount !== undefined) apiPatch.badgeShowCount = patch.showCount;
+    if (patch.label !== undefined) apiPatch.badgeLabel = patch.label;
+    void persistBadge(apiPatch, message);
   };
 
   // Submit New Review — from the widget sandbox (a customer) or from Add review (an employee)
@@ -2154,6 +2199,14 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></svg>
                   Installation guide
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentView("badge")}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 2l2.9 6.26 6.6.56-5 4.36 1.5 6.45L12 16.9 5.99 19.63l1.5-6.45-5-4.36 6.6-.56L12 2z" /></svg>
+                  Badge settings
+                </button>
               </div>
 
               {/* Widget Type Selector */}
@@ -2238,14 +2291,9 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
                 <h2 className="text-sm font-bold text-slate-800 mb-4">Interactive widget preview</h2>
                 <div className="p-6 bg-slate-50 border border-slate-200 rounded-xl">
                   {widgetType === "badge" && (
-                    <div className="inline-flex items-center gap-3 p-4 bg-white rounded-xl border border-slate-300">
-                      <span className="text-[#FBBC04] text-lg">★★★★★</span>
-                      <span className="text-xl font-bold text-slate-900">
-                        {data.metrics.averageRating.toFixed(1)}
-                      </span>
-                      <span className="text-xs text-slate-400">
-                        based on {data.metrics.published} reviews
-                      </span>
+                    <div className={`flex items-center gap-3 rounded-xl border p-4 ${badgeLook.theme === "dark" ? "border-slate-700 bg-[#17181a]" : "border-slate-300 bg-white"}`}>
+                      <BadgeSample format={data.project.badgeFormat} score={data.metrics.averageRating.toFixed(1)} count={data.metrics.published} look={badgeLook} />
+                      <button type="button" onClick={() => setCurrentView("badge")} className="text-[11px] font-semibold text-blue-600 hover:underline">Badge settings</button>
                     </div>
                   )}
 
@@ -2621,28 +2669,86 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
                     <h1 className="text-lg font-bold text-slate-900">Rating badge</h1>
-                    <p className="mt-1 max-w-xl text-sm text-slate-500">Pick the badge that fits your site. The choice is saved and used wherever the widget renders a <code className="rounded bg-slate-100 px-1 py-0.5 text-[11px]">{'data-widget="badge"'}</code> block.</p>
+                    <p className="mt-1 max-w-xl text-sm text-slate-500">Pick one of the five kinds and tune how it looks. Everything here is saved and used wherever the widget renders a <code className="rounded bg-slate-100 px-1 py-0.5 text-[11px]">{'data-widget="badge"'}</code> block.</p>
                   </div>
-                  <BadgeSample format={badgeSelection} score={data.metrics.averageRating.toFixed(1)} count={data.metrics.published} />
+                  <button
+                    type="button"
+                    onClick={() => { setPreviewProject(null); setPreviewKind("badge"); setPreviewOpen(true); }}
+                    className="shrink-0 px-4 py-2 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg text-xs font-semibold transition-colors"
+                  >Preview &amp; insert</button>
+                </div>
+                <div className={`mt-4 flex flex-wrap items-center gap-4 rounded-lg border p-4 ${badgeLook.theme === "dark" ? "border-slate-700 bg-[#17181a]" : "border-slate-200 bg-slate-50"}`}>
+                  <BadgeSample format={badgeSelection} score={data.metrics.averageRating.toFixed(1)} count={data.metrics.published} look={badgeLook} />
+                  <span className={`text-[11px] ${badgeLook.theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>Live preview — {data.metrics.averageRating.toFixed(1)} from {data.metrics.published} published reviews</span>
                 </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {BADGE_META.map((variant) => (
-                  <button
-                    key={variant.id}
-                    type="button"
-                    onClick={() => void saveBadgeFormat(variant.id)}
-                    className={`rounded-xl border p-4 text-left transition-colors ${badgeSelection === variant.id ? "border-blue-600 bg-blue-50" : "border-slate-200 bg-white hover:bg-slate-50"}`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-semibold text-slate-800">{variant.name}</span>
-                      {badgeSelection === variant.id && <span className="rounded bg-blue-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">Active</span>}
+              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+                <h2 className="text-sm font-bold text-slate-800">Badge kind</h2>
+                <p className="mt-1 text-[11px] text-slate-500">Every card is rendered with the appearance settings below.</p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {BADGE_META.map((variant) => (
+                    <button
+                      key={variant.id}
+                      type="button"
+                      onClick={() => void saveBadgeFormat(variant.id)}
+                      className={`rounded-xl border p-4 text-left transition-colors ${badgeSelection === variant.id ? "border-blue-600 bg-blue-50" : "border-slate-200 bg-white hover:bg-slate-50"}`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-semibold text-slate-800">{variant.name}</span>
+                        {badgeSelection === variant.id && <span className="rounded bg-blue-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">Active</span>}
+                      </div>
+                      <p className="mt-1 text-[11px] text-slate-500">{variant.description}</p>
+                      <div className="mt-3 flex min-h-[46px] items-center"><BadgeSample format={variant.id} score={data.metrics.averageRating.toFixed(1)} count={data.metrics.published} look={badgeLook} /></div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+                <h2 className="text-sm font-bold text-slate-800">Appearance</h2>
+                <p className="mt-1 text-[11px] text-slate-500">Applied to every kind, to the badge inside the widget preview, and to the code you embed.</p>
+                <div className="mt-4 space-y-4">
+                  <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-slate-700">Size</span>
+                      <div className="flex overflow-hidden rounded-lg border border-slate-300" role="group" aria-label="Badge size">
+                        {BADGE_SIZE_META.map((option) => (
+                          <button key={option.id} type="button" aria-pressed={badgeLook.size === option.id} onClick={() => updateBadgeLook({ size: option.id }, "Badge size saved.")} className={`px-3 py-1.5 text-[11px] font-semibold transition-colors ${badgeLook.size === option.id ? "bg-blue-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>{option.name}</button>
+                        ))}
+                      </div>
                     </div>
-                    <p className="mt-1 text-[11px] text-slate-500">{variant.description}</p>
-                    <div className="mt-3"><BadgeSample format={variant.id} score={data.metrics.averageRating.toFixed(1)} count={data.metrics.published} /></div>
-                  </button>
-                ))}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-slate-700">Corners</span>
+                      <div className="flex overflow-hidden rounded-lg border border-slate-300" role="group" aria-label="Badge corners">
+                        {BADGE_SHAPE_META.map((option) => (
+                          <button key={option.id} type="button" aria-pressed={badgeLook.shape === option.id} onClick={() => updateBadgeLook({ shape: option.id }, "Badge corners saved.")} className={`px-3 py-1.5 text-[11px] font-semibold transition-colors ${badgeLook.shape === option.id ? "bg-blue-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>{option.name}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-slate-700">Theme</span>
+                      <div className="flex overflow-hidden rounded-lg border border-slate-300" role="group" aria-label="Badge theme">
+                        {BADGE_THEME_META.map((option) => (
+                          <button key={option.id} type="button" aria-pressed={badgeLook.theme === option.id} onClick={() => updateBadgeLook({ theme: option.id }, "Badge theme saved.")} className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold transition-colors ${badgeLook.theme === option.id ? "bg-blue-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>
+                            <span aria-hidden="true" className="inline-block h-3 w-3 rounded-[3px] border border-slate-300" style={{ background: option.id === "brand" ? data.project.brandColor : option.background }} />
+                            {option.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <label className="flex items-center gap-2 text-xs text-slate-700">
+                    <input type="checkbox" className="h-4 w-4 rounded border-slate-300" checked={badgeLook.showCount} onChange={(event) => updateBadgeLook({ showCount: event.target.checked }, "Review count setting saved.")} />
+                    Show the review count
+                    <span className="text-[11px] text-slate-400">— used by the Full and Banner kinds</span>
+                  </label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label htmlFor="badge-caption" className="text-xs font-semibold text-slate-700">Caption after the number</label>
+                    <input id="badge-caption" className="w-56 rounded-lg border border-slate-300 px-3 py-2 text-xs" value={badgeLook.label} maxLength={48} placeholder="reviews" onChange={(event) => setBadgeLook((current) => ({ ...current, label: event.target.value }))} onBlur={(event) => void persistBadge({ badgeLabel: event.target.value.trim() }, "Badge caption saved.")} />
+                    <span className="text-[11px] text-slate-400">Leave empty for “reviews” (Full) or “verified reviews” (Banner).</span>
+                  </div>
+                </div>
               </div>
 
               <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
@@ -2666,6 +2772,7 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
                 setPreviewProject(p);
               }}
               onToast={showToast}
+              metrics={{ averageRating: data.metrics.averageRating, published: data.metrics.published }}
               onPreview={(draft) => {
                 setActiveMenuRowId(null);
                 setPreviewProject(draft ?? data.project);

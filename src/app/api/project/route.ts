@@ -4,7 +4,7 @@ import { projects, type NotifyChannelKey, type NotifyChannels, type Reminder, ty
 import { ensureProject } from "@/lib/dashboard-data";
 import { parseFormFields } from "@/lib/custom-fields";
 import { MAX_PHOTOS_LIMIT, MAX_PHOTO_SIZE_LIMIT_KB } from "@/lib/photo-upload";
-import { BADGE_FORMATS } from "@/db/schema";
+import { BADGE_FORMATS, BADGE_SHAPES, BADGE_SIZES, BADGE_THEMES } from "@/db/schema";
 import { parseAllowedDomains } from "@/lib/widget-domains";
 
 export const dynamic = "force-dynamic";
@@ -189,6 +189,7 @@ export async function PATCH(request: Request) {
     "negativeSupportChat",
     "neutralBoostPositive",
     "negativeLookbackEnabled",
+    "badgeShowCount",
   ] as const;
   for (const key of boolKeys) {
     if (body[key] !== undefined) {
@@ -299,6 +300,26 @@ export async function PATCH(request: Request) {
     const format = String(body.badgeFormat);
     if (!BADGE_FORMATS.includes(format as (typeof BADGE_FORMATS)[number])) return fail("Unknown badge format.");
     values.badgeFormat = format;
+  }
+  if (body.badgeSize !== undefined) {
+    const size = String(body.badgeSize);
+    if (!BADGE_SIZES.includes(size as (typeof BADGE_SIZES)[number])) return fail("Unknown badge size.");
+    values.badgeSize = size;
+  }
+  if (body.badgeTheme !== undefined) {
+    const theme = String(body.badgeTheme);
+    if (!BADGE_THEMES.includes(theme as (typeof BADGE_THEMES)[number])) return fail("Unknown badge theme.");
+    values.badgeTheme = theme;
+  }
+  if (body.badgeShape !== undefined) {
+    const shape = String(body.badgeShape);
+    if (!BADGE_SHAPES.includes(shape as (typeof BADGE_SHAPES)[number])) return fail("Unknown badge shape.");
+    values.badgeShape = shape;
+  }
+  if (body.badgeLabel !== undefined) {
+    const label = String(body.badgeLabel).trim();
+    if (label.length > 48) return fail("Badge caption must be 48 characters or fewer.");
+    values.badgeLabel = label;
   }
   if (body.formFields !== undefined) {
     const parsed = parseFormFields(body.formFields);

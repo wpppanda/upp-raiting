@@ -72,6 +72,11 @@
       { id: "cf-table", label: "Table number", type: "text", options: [], required: false, showPublic: false }
     ],
     badgeFormat: "full",
+    badgeSize: "medium",
+    badgeTheme: "light",
+    badgeShape: "rounded",
+    badgeShowCount: true,
+    badgeLabel: "",
     publicShowCity: false,
     publicShowDate: true,
     publicShowName: true,

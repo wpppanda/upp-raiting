@@ -11,7 +11,7 @@ import { MAX_PHOTOS_LIMIT, MAX_PHOTO_SIZE_LIMIT_KB } from "@/lib/photo-upload";
 import { MAX_ALLOWED_DOMAINS } from "@/lib/widget-domains";
 
 type Sentiment = "positive" | "neutral" | "negative";
-type SectionKey = "reviews" | "form" | "reminders" | "queue" | "install" | "protection";
+type SectionKey = "reviews" | "form" | "reminders" | "queue" | "install" | "badge" | "protection";
 type ReminderUnit = "minutes" | "hours" | "days" | "weeks";
 
 const MENU: Array<{ id: SectionKey; label: string }> = [
@@ -21,6 +21,7 @@ const MENU: Array<{ id: SectionKey; label: string }> = [
   { id: "reminders", label: "Reminders" },
   { id: "queue", label: "Queue" },
   { id: "install", label: "Installation" },
+  { id: "badge", label: "Rating badge" },
 ];
 const PAGE_COPY: Record<SectionKey, { title: string; description: string }> = {
   reviews: { title: "Reviews", description: "Choose how customer reviews are classified, published, and answered." },
@@ -28,6 +29,7 @@ const PAGE_COPY: Record<SectionKey, { title: string; description: string }> = {
   reminders: { title: "Reminders", description: "Set up automatic review invitations after a customer visit or order." },
   queue: { title: "Publication queue", description: "Control publication limits and priority rules for queued reviews." },
   install: { title: "Installation", description: "How to add the widget to your website: domains, code, and verification." },
+  badge: { title: "Rating badge", description: "Pick one of the five badge kinds and tune how it looks on your site." },
   protection: { title: "Protection & Settings", description: "Control the widget domains, public widget fields, form privacy, Google reviews, and spam filters." },
 };
 const COLORS = {
@@ -126,6 +128,50 @@ function Switch({ checked, onChange, label, disabled = false }: { checked: boole
 function SwitchRow({ label, checked, onChange, description, help }: { label: string; checked: boolean; onChange: (value: boolean) => void; description?: string; help?: string }) {
   return <SettingRow label={label} description={description} help={help} className="rep-switch-row"><Switch label={label} checked={checked} onChange={onChange} /></SettingRow>;
 }
+const BADGE_KINDS = [
+  { id: "number", name: "Number", description: "Only the score — the smallest footprint." },
+  { id: "stars", name: "Stars", description: "Score plus a star row." },
+  { id: "full", name: "Full", description: "Score, stars and the review count." },
+  { id: "stars-only", name: "Stars only", description: "Only the star row, without numbers." },
+  { id: "banner", name: "Banner", description: "A wide strip for footers and hero sections." },
+] as const;
+const BADGE_SIZES = [
+  { id: "small", name: "Small", padding: "6px 10px", gap: 6, score: 15, caption: 10, star: 12, bigStar: 15 },
+  { id: "medium", name: "Medium", padding: "10px 14px", gap: 9, score: 19, caption: 11, star: 14, bigStar: 19 },
+  { id: "large", name: "Large", padding: "15px 22px", gap: 13, score: 27, caption: 13, star: 18, bigStar: 26 },
+] as const;
+const BADGE_THEMES = [
+  { id: "light", name: "Light", border: "#dadce0", background: "#ffffff", score: "#202124", caption: "#5f6368", divider: "#dadce0" },
+  { id: "dark", name: "Dark", border: "#5f6368", background: "#202124", score: "#ffffff", caption: "#bdc1c6", divider: "#5f6368" },
+  { id: "brand", name: "Brand", border: "transparent", background: "#617a58", score: "#ffffff", caption: "#ffffff", divider: "rgba(255,255,255,.45)" },
+] as const;
+const BADGE_SHAPES = [
+  { id: "rounded", name: "Rounded", radius: 10 },
+  { id: "pill", name: "Pill", radius: 999 },
+  { id: "square", name: "Square", radius: 3 },
+] as const;
+type BadgeSettings = { size: string; theme: string; shape: string; showCount: boolean; label: string; brandColor: string };
+function BadgeMark({ format, score, count, settings }: { format: string; score: string; count: number; settings: BadgeSettings }) {
+  const size = BADGE_SIZES.find(item => item.id === settings.size) ?? BADGE_SIZES[1];
+  const theme = BADGE_THEMES.find(item => item.id === settings.theme) ?? BADGE_THEMES[0];
+  const shape = BADGE_SHAPES.find(item => item.id === settings.shape) ?? BADGE_SHAPES[0];
+  const word = settings.label.trim() || (format === "banner" ? "verified reviews" : "reviews");
+  const shell: React.CSSProperties = { display: "inline-flex", alignItems: "center", gap: size.gap, padding: size.padding, border: `1px solid ${theme.border}`, borderRadius: shape.radius, background: theme.id === "brand" ? settings.brandColor : theme.background };
+  const scoreStyle: React.CSSProperties = { color: theme.score, fontSize: size.score, fontWeight: 600, lineHeight: 1.15 };
+  const stars = <span aria-hidden="true" style={{ color: "#FBBC04", fontSize: size.star, letterSpacing: 1 }}>★★★★★</span>;
+  const bigStars = <span aria-hidden="true" style={{ color: "#FBBC04", fontSize: size.bigStar, letterSpacing: 2 }}>★★★★★</span>;
+  const caption = <span style={{ color: theme.caption, fontSize: size.caption }}>{count} {word}</span>;
+  if (format === "banner") return <div style={{ ...shell, display: "flex", width: "100%", maxWidth: 420 }} data-badge-preview={format}>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: Math.max(5, size.gap - 2) }}><strong style={scoreStyle}>{score}</strong>{stars}</span>
+    {settings.showCount && <span aria-hidden="true" style={{ width: 1, alignSelf: "stretch", background: theme.divider }} />}
+    {settings.showCount && caption}
+  </div>;
+  return <div style={shell} data-badge-preview={format}>
+    {format !== "stars-only" && <strong style={scoreStyle}>{score}</strong>}
+    {format !== "number" && (format === "stars-only" ? bigStars : stars)}
+    {format === "full" && settings.showCount && caption}
+  </div>;
+}
 function CategoryIcon({ kind }: { kind: Sentiment }) {
   return <svg className="rep-choice-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M8 9h.01M16 9h.01" strokeWidth="2.7" />{kind === "positive" ? <path d="M7.5 13.5c1.2 2.1 2.7 3 4.5 3s3.3-.9 4.5-3" /> : kind === "neutral" ? <path d="M8 15h8" /> : <path d="M7.5 16c1.2-1.8 2.7-2.7 4.5-2.7s3.3.9 4.5 2.7" />}</svg>;
 }
@@ -206,7 +252,7 @@ function NotificationChannels({ channels, onChange }: { channels: NotifyChannels
   </SettingRow>;
 }
 
-export default function ReputationHub({ project, onSaved, onToast, onPreview }: { project: DashboardProject; onSaved: (project: DashboardProject) => void; onToast: (message: string) => void; onPreview: (project?: DashboardProject) => void }) {
+export default function ReputationHub({ project, onSaved, onToast, onPreview, metrics }: { project: DashboardProject; onSaved: (project: DashboardProject) => void; onToast: (message: string) => void; onPreview: (project?: DashboardProject) => void; metrics?: { averageRating: number; published: number } }) {
   const [section, setSection] = useState<SectionKey>("protection");
   const [category, setCategory] = useState<Sentiment>("positive");
   const [form, setForm] = useState(project);
@@ -425,6 +471,52 @@ export default function ReputationHub({ project, onSaved, onToast, onPreview }: 
     </>;
   }
 
+  function badgeSettings() {
+    const score = (metrics?.averageRating ?? 4.8).toFixed(1);
+    const count = metrics?.published ?? 0;
+    const settings: BadgeSettings = { size: form.badgeSize, theme: form.badgeTheme, shape: form.badgeShape, showCount: form.badgeShowCount, label: form.badgeLabel, brandColor: form.brandColor };
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const snippet = `<script src="${origin}/widget.js" data-project-id="${form.id}" defer></script>\n<div data-widget="badge"></div>`;
+    const segmented = <K extends "badgeSize" | "badgeTheme" | "badgeShape">(key: K, options: ReadonlyArray<{ id: string; name: string; radius?: number; background?: string; border?: string }>) =>
+      <div className="rep-rule-buttons" role="group" aria-label={key}>
+        {options.map(option => <button key={option.id} type="button" aria-pressed={form[key] === option.id} onClick={() => set(key, option.id as DashboardProject[K])}>
+          {(option.background || option.border) && <span aria-hidden="true" style={{ display: "inline-block", width: 12, height: 12, marginRight: 6, verticalAlign: -2, border: `1px solid ${option.border ?? "#d4d7e0"}`, borderRadius: option.radius ?? 3, background: option.background ?? "#fff" }} />}
+          {option.name}
+        </button>)}
+      </div>;
+    return <>
+      <Section title="Badge kind" description="Five layouts for the same rating. Previews use your live score and review count.">
+        <div className="rep-badge-grid" role="radiogroup" aria-label="Badge kind">
+          {BADGE_KINDS.map(kind => <button key={kind.id} type="button" role="radio" aria-checked={form.badgeFormat === kind.id} className="rep-badge-card" onClick={() => set("badgeFormat", kind.id)}>
+            <span className="rep-badge-card-head"><strong>{kind.name}</strong>{form.badgeFormat === kind.id && <span className="rep-badge-flag">Active</span>}</span>
+            <span className="rep-badge-card-note">{kind.description}</span>
+            <span className="rep-badge-card-sample"><BadgeMark format={kind.id} score={score} count={count} settings={settings} /></span>
+          </button>)}
+        </div>
+      </Section>
+      <Section title="Appearance" description="These settings apply to the active kind, to the badge inside the widget preview, and to the code you embed.">
+        <SettingRow label="Size" help="Small fits sidebars, Medium is the default, Large suits footers and hero sections.">{segmented("badgeSize", BADGE_SIZES)}</SettingRow>
+        <SettingRow label="Theme" help="Light is a white card, Dark is near black, Brand fills the badge with your brand colour.">{segmented("badgeTheme", BADGE_THEMES.map(theme => ({ ...theme, background: theme.id === "brand" ? form.brandColor : theme.background })))}</SettingRow>
+        <SettingRow label="Corners" help="Choose how the badge is clipped.">{segmented("badgeShape", BADGE_SHAPES)}</SettingRow>
+        <SwitchRow label="Show the review count" checked={form.badgeShowCount} onChange={value => set("badgeShowCount", value)} help="Applies to the Full and Banner kinds; the other kinds never show a count." />
+        <SettingRow label="Caption after the number" hint="Leave empty for “reviews” (Full) or “verified reviews” (Banner).">
+          <input className="rep-input" value={form.badgeLabel} maxLength={48} placeholder="reviews" aria-label="Caption after the number" onChange={event => set("badgeLabel", event.target.value)} />
+        </SettingRow>
+        <SettingRow label="Live preview" hint="How the badge will look on your website.">
+          <div className="rep-badge-stage" data-theme={form.badgeTheme}><BadgeMark format={form.badgeFormat} score={score} count={count} settings={settings} /></div>
+        </SettingRow>
+      </Section>
+      <Section title="Embed the badge" description="Add both lines before the closing body tag; the badge picks up the kind and appearance saved here.">
+        <pre className="rep-embed-pre">{snippet}</pre>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <button type="button" className="rep-button" onClick={() => { void navigator.clipboard.writeText(snippet).then(() => { setEmbedCopied(true); window.setTimeout(() => setEmbedCopied(false), 2000); }); }}>{embedCopied ? "✓ Copied" : "Copy badge code"}</button>
+          <button type="button" className="rep-button quiet" onClick={() => onPreview(form)}>Open preview &amp; insert</button>
+        </div>
+        <p className="rep-settings-note">Need a different kind in one place only? Add <code>{'data-format="banner"'}</code> to that div — it overrides the saved kind for that block alone.</p>
+      </Section>
+    </>;
+  }
+
   function installSettings() {
     const domains = [form.domain, ...(form.allowedDomains ?? []).filter(Boolean)];
     const origin = typeof window !== "undefined" ? window.location.origin : "";
@@ -511,6 +603,7 @@ export default function ReputationHub({ project, onSaved, onToast, onPreview }: 
         {section === "reminders" && reminderSettings()}
         {section === "queue" && queueSettings()}
         {section === "install" && installSettings()}
+        {section === "badge" && badgeSettings()}
         {section === "protection" && protectionSettings()}
         <div className="rep-footer"><span aria-live="polite">{dirty ? "You have unsaved changes" : "All settings are up to date"}</span><div className="rep-footer-actions"><button type="button" className="rep-button quiet" onClick={() => onPreview(form)}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></svg>Preview &amp; insert</button>{dirty && <button type="button" className="rep-button quiet" disabled={saving} onClick={() => { setForm(project); setUnits(Object.fromEntries(project.reminders.map(item => [item.id, inferUnit(item.delayMinutes)]))); }}>Discard changes</button>}<button type="button" className="rep-button primary" disabled={saving || !dirty} onClick={() => void save()}>{saving ? "Saving…" : "Save changes"}</button></div></div>
       </div>

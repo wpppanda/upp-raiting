@@ -54,6 +54,25 @@
       ".otklik-widget .ow-badge-banner{display:flex;align-items:center;gap:12px;width:100%;max-width:420px}",
       ".otklik-widget .ow-badge-banner-left{display:flex;align-items:center;gap:8px}",
       ".otklik-widget .ow-badge-divider{width:1px;align-self:stretch;background:#dadce0}",
+      ".otklik-widget .ow-badge--small{gap:6px;padding:6px 10px}",
+      ".otklik-widget .ow-badge--small .ow-badge-score{font-size:15px}",
+      ".otklik-widget .ow-badge--small .ow-badge-caption{font-size:10px}",
+      ".otklik-widget .ow-badge--small .ow-stars{font-size:12px}",
+      ".otklik-widget .ow-badge--small .ow-stars-big{font-size:15px;letter-spacing:1px}",
+      ".otklik-widget .ow-badge--large{gap:13px;padding:15px 22px}",
+      ".otklik-widget .ow-badge--large .ow-badge-score{font-size:27px}",
+      ".otklik-widget .ow-badge--large .ow-badge-caption{font-size:13px}",
+      ".otklik-widget .ow-badge--large .ow-stars{font-size:18px}",
+      ".otklik-widget .ow-badge--large .ow-stars-big{font-size:26px;letter-spacing:3px}",
+      ".otklik-widget .ow-badge--dark{border-color:#5f6368;background:#202124}",
+      ".otklik-widget .ow-badge--dark .ow-badge-score{color:#fff}",
+      ".otklik-widget .ow-badge--dark .ow-badge-caption{color:#bdc1c6}",
+      ".otklik-widget .ow-badge--dark .ow-badge-divider{background:#5f6368}",
+      ".otklik-widget .ow-badge--brand{border-color:transparent;background:var(--otklik-accent,#617a58)}",
+      ".otklik-widget .ow-badge--brand .ow-badge-score,.otklik-widget .ow-badge--brand .ow-badge-caption{color:#fff}",
+      ".otklik-widget .ow-badge--brand .ow-badge-divider{background:rgba(255,255,255,.45)}",
+      ".otklik-widget .ow-badge--pill{border-radius:999px}",
+      ".otklik-widget .ow-badge--square{border-radius:3px}",
       ".otklik-widget .ow-form{max-width:540px;padding:20px;border:1px solid #b6bcc4;border-radius:12px;background:#fff}",
       ".otklik-widget .ow-form-title{margin:0;color:#202124;font-size:19px;font-weight:650}",
       ".otklik-widget .ow-form-description{margin:5px 0 16px;color:#5f6368;font-size:12px}",
@@ -233,33 +252,53 @@
   }
 
   function renderBadge(container, payload) {
-    var format = container.getAttribute("data-format") || ((payload.badge && payload.badge.format) || "full");
+    var config = payload.badge || {};
+    var format = container.getAttribute("data-format") || (config.format || "full");
     var scale = payload.project.ratingScale || "stars";
     var suffix = scale === "nps" ? "/10" : "";
     var score = payload.metrics.averageRating.toFixed(1);
-    var symbol = "★★★★★";
+    var symbol = "\u2605\u2605\u2605\u2605\u2605";
     var count = payload.metrics.total;
+    var size = config.size || "medium";
+    var theme = config.theme || "light";
+    var shape = config.shape || "rounded";
+    var showCount = config.showCount !== false;
+    var captionText = String(config.label || "").trim();
     container.classList.add("ow-badge-wrap");
 
+    function classes(extra) {
+      var list = ["ow-badge"];
+      if (extra) list.push(extra);
+      if (size !== "medium") list.push("ow-badge--" + size);
+      if (theme !== "light") list.push("ow-badge--" + theme);
+      if (shape !== "rounded") list.push("ow-badge--" + shape);
+      return list.join(" ");
+    }
+    function caption(defaultWord) {
+      return count + " " + (captionText || defaultWord);
+    }
+
     if (format === "banner") {
-      var banner = element("div", "ow-badge ow-badge-banner");
+      var banner = element("div", classes("ow-badge-banner"));
       var left = element("div", "ow-badge-banner-left");
       left.appendChild(element("strong", "ow-badge-score", score + suffix));
       left.appendChild(element("span", "ow-stars", symbol));
       banner.appendChild(left);
-      banner.appendChild(element("span", "ow-badge-divider", ""));
-      banner.appendChild(element("span", "ow-badge-caption", count + " verified reviews"));
+      if (showCount) {
+        banner.appendChild(element("span", "ow-badge-divider", ""));
+        banner.appendChild(element("span", "ow-badge-caption", caption("verified reviews")));
+      }
       container.appendChild(banner);
       return;
     }
 
-    var badge = element("div", "ow-badge");
+    var badge = element("div", classes(""));
     if (format !== "stars-only") badge.appendChild(element("strong", "ow-badge-score", score + suffix));
     if (format !== "number") {
       var stars = element("span", format === "stars-only" ? "ow-stars ow-stars-big" : "ow-stars", symbol);
       badge.appendChild(stars);
     }
-    if (format === "full") badge.appendChild(element("span", "ow-badge-caption", count + " reviews"));
+    if (format === "full" && showCount) badge.appendChild(element("span", "ow-badge-caption", caption("reviews")));
     container.appendChild(badge);
   }
 

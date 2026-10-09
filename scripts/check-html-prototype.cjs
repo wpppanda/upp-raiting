@@ -262,6 +262,36 @@ const bodyText = () => doc.body.textContent;
   await flush();
   check("choosing a variant saves it as the project default", window.__UPP_DEMO__.project.badgeFormat === "banner");
   check("the badge embed snippet follows the selection", /data-widget="badge" data-format="banner"/.test(bodyText()));
+  check("the badge page has appearance controls", /Appearance/.test(bodyText()) && !!doc.querySelector("#badge-caption") && doc.querySelectorAll('[role="group"][aria-label="Badge size"] button').length === 3);
+  check("every kind card renders a live preview", doc.querySelectorAll("[data-badge-preview]").length >= 6);
+  await click(byText('[role="group"][aria-label="Badge size"] button', "Large"));
+  await flush();
+  check("choosing a size saves it on the project", window.__UPP_DEMO__.project.badgeSize === "large");
+  check("the size is applied to every preview", doc.querySelector("[data-badge-preview] strong").style.fontSize === "27px");
+  await click(byText('[role="group"][aria-label="Badge theme"] button', "Dark"));
+  await flush();
+  check("choosing a theme saves it on the project", window.__UPP_DEMO__.project.badgeTheme === "dark");
+  check("the dark theme paints the badge", doc.querySelector("[data-badge-preview]").style.backgroundColor === "rgb(32, 33, 36)");
+  await click(byText('[role="group"][aria-label="Badge corners"] button', "Pill"));
+  await flush();
+  check("choosing pill corners saves it on the project", window.__UPP_DEMO__.project.badgeShape === "pill");
+  check("the pill radius is applied", doc.querySelector("[data-badge-preview]").style.borderRadius === "999px");
+  const countToggle = Array.prototype.slice.call(doc.querySelectorAll('input[type="checkbox"]')).filter((input) => input.closest("label") && /Show the review count/.test(input.closest("label").textContent))[0];
+  check("the badge page offers a review-count switch", !!countToggle && countToggle.checked === true);
+  countToggle.click();
+  await flush();
+  check("hiding the review count saves it on the project", window.__UPP_DEMO__.project.badgeShowCount === false);
+  check("hiding the count removes it from the Full preview", !/reviews/.test(doc.querySelector('[data-badge-preview="full"]').textContent));
+  const captionInput = doc.querySelector("#badge-caption");
+  Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set.call(captionInput, "happy guests");
+  captionInput.dispatchEvent(new window.Event("input", { bubbles: true }));
+  captionInput.dispatchEvent(new window.FocusEvent("focusout", { bubbles: true }));
+  await flush();
+  check("a custom caption is saved on the project", window.__UPP_DEMO__.project.badgeLabel === "happy guests");
+  countToggle.click();
+  await flush();
+  check("the review count can be switched back on", window.__UPP_DEMO__.project.badgeShowCount === true);
+  check("the custom caption shows in the Full preview", /\d+ happy guests/.test(doc.querySelector('[data-badge-preview="full"]').textContent));
 
   // Installation guide right after the publication queue.
   await click(doc.querySelector('button[title="Install guide — add the widget to your site"]'));
@@ -275,6 +305,39 @@ const bodyText = () => doc.body.textContent;
   check("the widgets page links to the installation guide", /Installation guide/.test(bodyText()));
   await click(Array.prototype.slice.call(doc.querySelectorAll("button")).filter((button) => button.textContent.trim() === "Installation guide")[0]);
   check("the labeled button opens the install page", /Install the widget on your website/.test(bodyText()));
+
+  // The badge settings are reachable by a labelled button and from the hub menu.
+  await click(doc.querySelector('button[title="Widgets and embed code"]'));
+  await click(byText("button", "Badge settings"));
+  check("the labeled button opens the badge settings", /Rating badge/.test(bodyText()) && !!doc.querySelector("#badge-caption"));
+
+  await click(doc.querySelector('button[title="Business reputation — all settings in one place"]'));
+  await sleep(200);
+  const navWithBadge = Array.prototype.slice.call(doc.querySelectorAll(".rep-navigation button")).map((button) => button.textContent.trim());
+  check("the hub menu has Rating badge right after Installation", navWithBadge.indexOf("Rating badge") === navWithBadge.indexOf("Installation") + 1);
+  await click(byText(".rep-navigation button", "Rating badge"));
+  await flush();
+  check("the hub badge section lists the five kinds", doc.querySelectorAll(".rep-badge-card").length === 5);
+  check("the hub badge section has the appearance controls", doc.querySelectorAll(".rep-rule-buttons").length >= 3 && /Show the review count/.test(bodyText()) && /Caption after the number/.test(bodyText()));
+  check("the hub badge section previews every kind", doc.querySelectorAll(".rep-badge-card [data-badge-preview]").length === 5);
+  const starsOnlyCard = Array.prototype.slice.call(doc.querySelectorAll(".rep-badge-card")).filter((card) => /Stars only/.test(card.textContent))[0];
+  await click(starsOnlyCard);
+  await flush();
+  check("the hub marks the chosen kind active", starsOnlyCard.getAttribute("aria-checked") === "true");
+  await click(byText(".rep-footer-actions button", "Save changes"));
+  await flush();
+  check("saving the hub badge section stores the kind", window.__UPP_DEMO__.project.badgeFormat === "stars-only");
+
+  // The widget preview drawer follows the saved badge look.
+  await click(byText(".rep-footer-actions button", "Preview & insert"));
+  await sleep(340);
+  await click(byText('[role="tablist"] button', "Badge"));
+  await sleep(220);
+  const drawerBadge = doc.querySelector('dialog.side-panel[open] [data-badge-preview]');
+  check("the preview drawer renders the saved badge kind", !!drawerBadge && drawerBadge.getAttribute("data-badge-preview") === "stars-only");
+  check("the preview drawer applies the saved badge look", !!drawerBadge && drawerBadge.style.backgroundColor === "rgb(32, 33, 36)" && drawerBadge.style.borderRadius === "999px");
+  await click(doc.querySelector('dialog.side-panel[open] .panel-close'));
+  await sleep(260);
 
   check("no runtime errors were thrown", errors.length === 0);
   if (errors.length) console.log(errors);

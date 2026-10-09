@@ -104,7 +104,14 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
             id: field.id, label: field.label, type: field.type, options: field.options, required: field.required,
           })),
         },
-        badge: { format: project.badgeFormat },
+        badge: {
+          format: project.badgeFormat,
+          size: project.badgeSize,
+          theme: project.badgeTheme,
+          shape: project.badgeShape,
+          showCount: project.badgeShowCount,
+          label: project.badgeLabel,
+        },
         display: {
           city: project.publicShowCity,
           date: project.publicShowDate,

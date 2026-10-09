@@ -88,6 +88,11 @@ export type DashboardProject = {
   formShowComment: boolean;
   formFields: CustomFormField[];
   badgeFormat: string;
+  badgeSize: string;
+  badgeTheme: string;
+  badgeShape: string;
+  badgeShowCount: boolean;
+  badgeLabel: string;
   publicShowCity: boolean;
   publicShowDate: boolean;
   publicShowName: boolean;
@@ -338,6 +343,11 @@ function ensureSchema(): Promise<void> {
       sql`alter table "reviews" add column if not exists "custom_fields" jsonb not null default '[]'::jsonb`,
       sql`alter table "projects" add column if not exists "form_fields" jsonb not null default '[]'::jsonb`,
       sql`alter table "projects" add column if not exists "badge_format" varchar(16) not null default 'full'`,
+      sql`alter table "projects" add column if not exists "badge_size" varchar(8) not null default 'medium'`,
+      sql`alter table "projects" add column if not exists "badge_theme" varchar(8) not null default 'light'`,
+      sql`alter table "projects" add column if not exists "badge_shape" varchar(8) not null default 'rounded'`,
+      sql`alter table "projects" add column if not exists "badge_show_count" boolean not null default true`,
+      sql`alter table "projects" add column if not exists "badge_label" varchar(64) not null default ''`,
       sql`alter table "projects" add column if not exists "form_show_email" boolean not null default true`,
       sql`alter table "projects" add column if not exists "form_show_city" boolean not null default true`,
       sql`alter table "projects" add column if not exists "form_show_comment" boolean not null default true`,
