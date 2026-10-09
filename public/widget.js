@@ -67,6 +67,18 @@
       ".otklik-widget .ow-anonymous input{width:14px;height:14px;flex:0 0 14px;margin:1px 0 0;accent-color:var(--otklik-accent)}",
       ".otklik-widget .ow-optional{color:#8a958e;font-size:10px;font-weight:400}",
       ".otklik-widget .ow-message{min-height:18px;margin:8px 0 0;color:#188038;font-size:11px}",
+      ".otklik-widget .ow-photos{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}",
+      ".otklik-widget .ow-photo{width:74px;height:74px;object-fit:cover;border:1px solid #dadce0;border-radius:8px;background:#f1f3f4}",
+      ".otklik-widget .ow-photos-field{margin-top:12px}",
+      ".otklik-widget .ow-photo-pick{min-height:36px;padding:0 13px;color:#3c4043;border:1px dashed #dadce0;border-radius:7px;background:#fff;font:inherit;font-size:12px;cursor:pointer}",
+      ".otklik-widget .ow-photo-pick:hover{background:#f8f9fa}",
+      ".otklik-widget .ow-photo-pick:disabled{color:#9aa0a6;cursor:not-allowed}",
+      ".otklik-widget .ow-photo-hint{margin:7px 0 0;color:#80868b;font-size:10px}",
+      ".otklik-widget .ow-photo-hint.error{color:#d93025}",
+      ".otklik-widget .ow-photo-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:9px}",
+      ".otklik-widget .ow-photo-thumb{position:relative;display:block;width:64px;height:64px}",
+      ".otklik-widget .ow-photo-thumb img{width:64px;height:64px;object-fit:cover;border:1px solid #dadce0;border-radius:8px}",
+      ".otklik-widget .ow-photo-remove{position:absolute;top:-6px;right:-6px;width:19px;height:19px;padding:0;color:#fff;border:0;border-radius:50%;background:#5f6368;font-size:12px;line-height:19px;cursor:pointer}",
       ".otklik-widget .ow-message.error{color:#d93025}",
       /* экран после отправки */
       ".otklik-widget .ow-thanks{max-width:540px;padding:22px;border:1px solid #dadce0;border-radius:12px;background:#fff;text-align:center}",
@@ -180,6 +192,18 @@
           card.appendChild(element("p", "ow-review-text", review.content));
         }
       }
+      if (Array.isArray(review.photos) && review.photos.length) {
+        var photoRow = element("div", "ow-photos");
+        review.photos.forEach(function (src, index) {
+          if (!isSafePhoto(src)) return;
+          var photo = element("img", "ow-photo");
+          photo.src = src;
+          photo.alt = "Customer photo " + (index + 1);
+          photo.loading = "lazy";
+          photoRow.appendChild(photo);
+        });
+        if (photoRow.children.length) card.appendChild(photoRow);
+      }
       var showReply = container.getAttribute("data-show-response") !== "false";
       if (showReply && review.companyReply) {
         var reply = element("div", "ow-reply");
@@ -251,6 +275,132 @@
     return box;
   }
 
+  function photoDataSizeKb(dataUrl) {
+    var comma = String(dataUrl).indexOf(",");
+    return Math.ceil(((String(dataUrl).length - comma - 1) * 3) / 4 / 1024);
+  }
+
+  function isSafePhoto(value) {
+    var v = String(value || "");
+    if (!v) return false;
+    if (/^data:image\/(jpeg|jpg|png|webp);base64,[A-Za-z0-9+\/]+={0,2}$/.test(v)) return true;
+    return safeUrl(v) !== null;
+  }
+
+  // Читает картинку и пережимает её в JPEG не тяжелее maxKb (1280px по длинной стороне)
+  function compressImage(file, maxKb) {
+    return new Promise(function (resolve, reject) {
+      if (!/^image\//.test(file.type)) { reject(new Error("Only image files can be attached.")); return; }
+      var reader = new FileReader();
+      reader.onerror = function () { reject(new Error("This file could not be read.")); };
+      reader.onload = function () {
+        var image = new Image();
+        image.onerror = function () { reject(new Error("This file could not be read as an image.")); };
+        image.onload = function () {
+          var maxEdge = 1280;
+          var width = image.naturalWidth || maxEdge;
+          var height = image.naturalHeight || maxEdge;
+          var scale = Math.min(1, maxEdge / Math.max(width, height));
+          var canvas = document.createElement("canvas");
+          canvas.width = Math.max(1, Math.round(width * scale));
+          canvas.height = Math.max(1, Math.round(height * scale));
+          var context = canvas.getContext("2d");
+          if (!context) { reject(new Error("This browser cannot process images.")); return; }
+          context.fillStyle = "#ffffff";
+          context.fillRect(0, 0, canvas.width, canvas.height);
+          context.drawImage(image, 0, 0, canvas.width, canvas.height);
+          var quality = 0.85;
+          var dataUrl = canvas.toDataURL("image/jpeg", quality);
+          while (photoDataSizeKb(dataUrl) > maxKb && quality > 0.35) {
+            quality -= 0.1;
+            dataUrl = canvas.toDataURL("image/jpeg", quality);
+          }
+          if (photoDataSizeKb(dataUrl) > maxKb) { reject(new Error("This photo is too large — the limit is " + maxKb + " KB.")); return; }
+          resolve(dataUrl);
+        };
+        image.src = String(reader.result);
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function renderPhotoField(config) {
+    var maxPhotos = Math.max(1, Math.min(10, Number(config.maxPhotos) || 3));
+    var maxKb = Math.max(64, Math.min(4096, Number(config.maxPhotoSizeKb) || 400));
+    var defaultHint = "Up to " + maxPhotos + " photo" + (maxPhotos === 1 ? "" : "s") + ", " + maxKb + " KB each. Large photos are compressed automatically.";
+    var photos = [];
+    var wrap = element("div", "ow-photos-field");
+    wrap.appendChild(element("span", "ow-rate-label", "Photos (optional)"));
+    var input = element("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.multiple = true;
+    input.style.display = "none";
+    var pick = element("button", "ow-photo-pick", "Add photos");
+    pick.type = "button";
+    pick.addEventListener("click", function () { input.click(); });
+    var hint = element("p", "ow-photo-hint", defaultHint);
+    var list = element("div", "ow-photo-list");
+    wrap.appendChild(pick);
+    wrap.appendChild(input);
+    wrap.appendChild(hint);
+    wrap.appendChild(list);
+
+    function renderList() {
+      list.textContent = "";
+      photos.forEach(function (src, index) {
+        var thumb = element("span", "ow-photo-thumb");
+        var img = element("img");
+        img.src = src;
+        img.alt = "Photo " + (index + 1);
+        var remove = element("button", "ow-photo-remove", "×");
+        remove.type = "button";
+        remove.setAttribute("aria-label", "Remove photo " + (index + 1));
+        remove.addEventListener("click", function () { photos.splice(index, 1); renderList(); });
+        thumb.appendChild(img);
+        thumb.appendChild(remove);
+        list.appendChild(thumb);
+      });
+      pick.disabled = photos.length >= maxPhotos;
+      pick.textContent = photos.length >= maxPhotos ? "Photo limit reached" : "Add photos";
+    }
+
+    input.addEventListener("change", function () {
+      var room = Math.max(0, maxPhotos - photos.length);
+      var files = Array.prototype.slice.call(input.files || []).slice(0, room);
+      if (!files.length) {
+        hint.textContent = "You can attach up to " + maxPhotos + " photo" + (maxPhotos === 1 ? "" : "s") + ".";
+        hint.classList.add("error");
+        input.value = "";
+        return;
+      }
+      pick.disabled = true;
+      var failed = null;
+      var chain = Promise.resolve();
+      files.forEach(function (file) {
+        chain = chain.then(function () {
+          return compressImage(file, maxKb).then(function (dataUrl) {
+            if (photos.length < maxPhotos) photos.push(dataUrl);
+          }, function (error) { failed = error; });
+        });
+      });
+      chain.then(function () {
+        input.value = "";
+        renderList();
+        if (failed) {
+          hint.textContent = failed.message || "This photo could not be added.";
+          hint.classList.add("error");
+        } else {
+          hint.textContent = defaultHint;
+          hint.classList.remove("error");
+        }
+      });
+    });
+
+    renderList();
+    return { node: wrap, getPhotos: function () { return photos.slice(); } };
+  }
+
   function renderForm(container, payload) {
     container.classList.add("ow-form-wrap");
     var config = payload.project.form || {};
@@ -302,6 +452,9 @@
     commentField.required = textRequired;
     form.appendChild(commentField);
 
+    var photoField = config.allowPhotos === true ? renderPhotoField(config) : null;
+    if (photoField) form.appendChild(photoField.node);
+
     var anonymousField = null;
     if (config.allowAnonymousReviews === true) {
       var anonymousLabel = element("label", "ow-anonymous");
@@ -346,7 +499,8 @@
           authorCity: cityField.value.trim(),
           isAnonymous: anonymousField ? anonymousField.checked : false,
           rating: selectedRating,
-          content: comment
+          content: comment,
+          photos: photoField ? photoField.getPhotos() : []
         })
       }).then(function (response) {
         return response.json().then(function (body) {

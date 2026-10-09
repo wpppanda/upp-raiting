@@ -14,6 +14,12 @@
     };
   }
 
+  /* Two small demo photos (PNG data URLs) so the attachment UI has something to show. */
+  var DEMO_PHOTOS = [
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAIAAABt+uBvAAABJklEQVR42u3bsQ3CQAwFUM/FNIzCDIzCMPRZgI6eAokGkoCU853Dk/4ETy4u8XecjwdZSCAABAgQIECAAAESQIAAAQIECBAgAQQIECBAr1wvp7n8L9ACylBYUYKmI1MUounCFOVokpmiu879Ni2nr1H0oll1+UmqJNCGNN8wFQNqpJNvFGk6m9CsMlUF2lxnzqgAUJpOjlGU1kkwaguUoPPRaFCgLuPTeohiB+PTdIhiHzrtjAClAI2g08gIEKDRgDrqvBsNATTO+LQYIkCAAAECBAgQIEBe0r7FAAGqCuSPIiBbDXsxm9WCq2e7ee0O/SANMx1FLdeKLVc9aU17txqufdyLuTh0s+qo19UzIECABBAgQIAAAQIESAABAgQIECBAgOSZB/JIwpR97AJbAAAAAElFTkSuQmCC",
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAIAAABt+uBvAAAApklEQVR42u3aMQkAIBRAQWOZwRRGcDaGCcXZEDb4o4gcvAQ3v9RHU1BCAAgQIECAAAECJECAAAECBAgQIAEC9CLQ2vOdAAECBAgQIECAAAECBAgQIECAAAECBAgQIECAAAECBAgQIECAAAECBAgQIECAAAGyAQMSIECAAAECBAiQAAECBAgQoE+AaskKAgQIECBAgAABAiRAgAABAgQIECABAgToVge40g1sca+jtwAAAABJRU5ErkJggg=="
+  ];
+
   var project = {
     id: "9f1c2a44-6b7e-4d0a-9c31-2f6b8e1d5a70",
     name: "Zerna Coffee",
@@ -55,6 +61,9 @@
     googleReviewUrl: "https://g.page/r/zerna-coffee/review",
     allowAnonymousReviews: true,
     reviewTextRequired: false,
+    allowPhotos: true,
+    maxPhotos: 3,
+    maxPhotoSizeKb: 400,
     publicShowCity: false,
     publicShowDate: true,
     publicShowName: true,
@@ -106,15 +115,18 @@
       companyReply: null,
       replyAt: null,
       hiddenText: false,
-      pinned: false
+      pinned: false,
+      photos: [],
+      authorKind: "customer",
+      addedBy: null
     }, extra || {});
   }
 
   var reviews = [
-    review("Valeria M.", "valeria@example.com", "New York", 5, "Such a cozy spot — the matcha and the pour-over are love. I will definitely come back!", "published", 0.6, { companyReply: "Valeria, thank you for the warm words! We look forward to seeing you again ☕", replyAt: hoursAgo(0.1) }),
+    review("Valeria M.", "valeria@example.com", "New York", 5, "Such a cozy spot — the matcha and the pour-over are love. I will definitely come back!", "published", 0.6, { companyReply: "Valeria, thank you for the warm words! We look forward to seeing you again ☕", replyAt: hoursAgo(0.1), photos: [DEMO_PHOTOS[0], DEMO_PHOTOS[1]] }),
     review("Artem S.", "artem@example.com", "Chicago", 5, "The best cappuccino in the city. The barista helped me pick a bean, and now I come here first.", "published", 4, { companyReply: "Artem, glad we helped you find your taste. See you soon!" }),
     review("Anna K.", "anna@example.com", "Boston", 4, "Delicious and atmospheric, but we waited a bit long for the order. Otherwise everything was great.", "published", 26, { companyReply: "Anna, thanks for the feedback — we have already discussed serving speed with the team." }),
-    review("Maria R.", "maria@example.com", "Seattle", 5, "Zerna has become my new Sunday tradition. Thank you for the cozy atmosphere and great coffee!", "published", 50),
+    review("Maria R.", "maria@example.com", "Seattle", 5, "Zerna has become my new Sunday tradition. Thank you for the cozy atmosphere and great coffee!", "published", 50, { photos: [DEMO_PHOTOS[1]] }),
     review("Pavel T.", "pavel@example.com", "Austin", 3, "The dessert was not very fresh. I hope you will fix this. The coffee itself was excellent.", "published", 73, { companyReply: "Pavel, we are sorry about this experience. Please reach out — we want to make it right." }),
     review("Polina D.", "polina@example.com", "Portland", 5, "Very attentive service and an incredibly delicious raf. Beautiful and calm inside.", "published", 101, { isAnonymous: true }),
     review("Sergey V.", "sergey@example.com", "Denver", 5, "Great place, beautiful interior, and excellent coffee. I stopped by on a whim — I will come back on purpose.", "queued", 0.4, { scheduledAt: new Date(Date.now() + 35 * 60 * 1000).toISOString() }),
@@ -122,8 +134,14 @@
     review("Ivan K.", "ivan@example.com", "Miami", 1, "I waited almost forty minutes for my order and the coffee went cold. I am very disappointed with the service.", "pending", 1.2),
     review("Marina B.", "marina@example.com", "Los Angeles", 3, "Everything was fine, but the tables were full and I had to wait at the entrance.", "pending", 2.4),
     review("Roman F.", "roman@example.com", "Dallas", 2, "I expected more from breakfast: the dishes were served cold and the waiter did not notice.", "pending", 3.1),
-    review("Olga N.", "olga@example.com", "Philadelphia", 4, "Good coffee, but I would like more sugar-free syrup options.", "pending", 5.5)
+    review("Olga N.", "olga@example.com", "Philadelphia", 4, "Good coffee, but I would like more sugar-free syrup options.", "pending", 5.5),
+    review("Nina W.", "", "Rotterdam", 5, "Left a review by phone after the order — the manager passed it on with the customer's permission.", "published", 8, { source: "Added manually", authorKind: "employee", addedBy: "Administrator", photos: [DEMO_PHOTOS[0]] })
   ];
+
+  function isPhotoValue(value) {
+    if (typeof value !== "string" || !value) return false;
+    return /^data:image\/(jpeg|jpg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(value) || /^https:\/\//.test(value);
+  }
 
   function sentimentOf(rating) {
     return rating >= project.positiveThreshold ? "positive" : rating >= project.neutralThreshold ? "neutral" : "negative";
@@ -206,12 +224,16 @@
         var rating = Number(body.rating) || 5;
         var sentiment = sentimentOf(rating);
         var mode = sentiment === "positive" ? project.positivePublishMode : sentiment === "neutral" ? project.neutralPublishMode : project.negativePublishMode;
+        var authorKind = body.authorKind === "employee" ? "employee" : "customer";
+        var addedBy = typeof body.addedBy === "string" ? body.addedBy.trim().slice(0, 120) : "";
+        var submitted = Array.isArray(body.photos) ? body.photos.filter(isPhotoValue) : [];
         var created = review(
           String(body.authorName || "Guest"), body.authorEmail || "", body.authorCity || "",
-          rating, String(body.content || ""), mode === "instant" ? "published" : mode === "delayed" ? "queued" : "pending", 0
+          rating, String(body.content || ""), mode === "instant" ? "published" : mode === "delayed" ? "queued" : "pending", 0,
+          { photos: project.allowPhotos ? submitted.slice(0, project.maxPhotos) : [], authorKind: authorKind, addedBy: addedBy || null }
         );
         created.id = "9a0c0000-0000-4000-8000-0000000001" + String(counter).padStart(2, "0");
-        created.source = "Форма сбора отзывов";
+        created.source = authorKind === "employee" || addedBy ? "Added manually" : "Review form";
         reviews.unshift(created);
         window.__UPP_DEMO__ = dashboardData();
         return json({ review: JSON.parse(JSON.stringify(created)), followUp: followUp(sentiment) }, 201);

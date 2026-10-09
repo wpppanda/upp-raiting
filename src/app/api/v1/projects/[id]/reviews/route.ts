@@ -2,6 +2,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { projects, reviews, type ReviewSentiment, type ReviewStatus } from "@/db/schema";
 import { publishDueReviews } from "@/lib/dashboard-data";
+import { sanitizePhotos } from "@/lib/photo-upload";
 import { encryptEmail } from "@/lib/pii";
 import { buildFollowUp } from "@/lib/follow-up";
 import { releaseBoostedPositives, shouldBoostPositive } from "@/lib/publish-rules";
@@ -74,6 +75,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
         content: reviews.content,
         hiddenText: reviews.hiddenText,
         companyReply: reviews.companyReply,
+        photos: reviews.photos,
         publishedAt: reviews.publishedAt,
       })
       .from(reviews)
@@ -90,6 +92,9 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
           allowAnonymousReviews: project.allowAnonymousReviews,
           reviewTextRequired: project.reviewTextRequired,
           minReviewLength: project.minReviewLength,
+          allowPhotos: project.allowPhotos,
+          maxPhotos: project.maxPhotos,
+          maxPhotoSizeKb: project.maxPhotoSizeKb,
         },
         display: {
           city: project.publicShowCity,
@@ -113,6 +118,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
           showText: project.publicShowText,
           hiddenText: review.hiddenText,
           companyReply: review.companyReply,
+          photos: review.photos ?? [],
           publishedAt: project.publicShowDate ? review.publishedAt : null,
           showAvatar: project.publicShowAvatar,
         };
@@ -154,6 +160,13 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     return jsonResponse({ error: project.reviewTextRequired ? `Review text must contain between ${minReviewLength} and 2,000 characters.` : `If you add a comment, it must contain at least ${minReviewLength} characters.` }, origin, 400);
   }
   if (authorEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(authorEmail)) return jsonResponse({ error: "Enter a valid email address." }, origin, 400);
+
+  const photoCheck = sanitizePhotos(body.photos, {
+    allowPhotos: project.allowPhotos,
+    maxPhotos: project.maxPhotos,
+    maxPhotoSizeKb: project.maxPhotoSizeKb,
+  });
+  if (photoCheck.error) return jsonResponse({ error: photoCheck.error }, origin, 400);
 
   const sentiment: ReviewSentiment = rating >= project.positiveThreshold
     ? "positive"
@@ -201,6 +214,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       source: "Website widget",
       status,
       createdAt,
+      photos: photoCheck.photos,
       scheduledAt: status === "queued" ? new Date(createdAt.getTime() + delay * 60 * 1000) : null,
       publishedAt: status === "published" ? createdAt : null,
     }).returning({ id: reviews.id, status: reviews.status });

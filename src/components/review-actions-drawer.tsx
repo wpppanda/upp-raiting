@@ -11,7 +11,7 @@ const statusLabels: Record<DashboardReview["status"], string> = {
 };
 const sentimentLabels: Record<DashboardReview["sentiment"], string> = { positive: "Positive", neutral: "Neutral", negative: "Negative" };
 const sentimentColors = { positive: "bg-[#eaf8f1] text-[#17865e]", neutral: "bg-[#fff6e3] text-[#b68022]", negative: "bg-[#fff0ed] text-[#bc5446]" };
-const sourceLabels: Record<string, string> = { "Виджет сайта": "Website widget", "Форма сбора отзывов": "Review form" };
+const sourceLabels: Record<string, string> = { "Виджет сайта": "Website widget", "Форма сбора отзывов": "Review form", "Website widget": "Website widget", "Review form": "Review form", "Added manually": "Added manually" };
 
 function formatDate(value: string | Date | null, timeZone: string) {
   if (!value) return "Not set";
@@ -101,10 +101,18 @@ export default function ReviewActionsDrawer({ review, project, busy, onClose, on
             {review.pinned && <span className="rounded bg-[#eef0ff] px-2 py-0.5 text-[10px] text-[#7169a4]">Pinned</span>}
           </div>
           <p className="review-details-text mt-3 text-[13px] leading-[1.7] text-[#475467]">{review.content}</p>
+          {(review.photos ?? []).length > 0 && <div className="mt-3 flex flex-wrap gap-2" data-review-photos>
+            {review.photos.map((photo, index) => <a key={`${review.id}-photo-${index}`} href={photo} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-lg border border-[#dae4f2] bg-[#f0f5fc]" aria-label={`Open customer photo ${index + 1}`}>
+              {/* Attachments are validated data: URLs or https links, never user markup. */}
+              <img src={photo} alt={`Customer photo ${index + 1}`} loading="lazy" className="h-20 w-20 object-cover" />
+            </a>)}
+          </div>}
           {review.hiddenText && <p className="mt-2 text-[11px] text-amber-700">The comment is hidden on your website. Moderators can still read it here.</p>}
           {review.companyReply && <div className="mt-3 border-l-2 border-[#a7c3e9] pl-3"><p className="text-[10px] font-semibold text-[#6d88aa]">Company reply</p><p className="review-details-text mt-1 text-xs leading-relaxed text-[#78879a]">{review.companyReply}</p></div>}
           <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-slate-400">
             <span>{sourceLabels[review.source] ?? review.source}</span>
+            {review.authorKind === "employee" && <span>Author · employee</span>}
+            {review.addedBy && <span>Added by · {review.addedBy}</span>}
             {review.authorCity && <span>City · {review.authorCity}</span>}
             {review.authorEmail && <span>Email · {review.authorEmail}</span>}
             <span title={review.id}>ID · {review.id.slice(0, 8)}</span>

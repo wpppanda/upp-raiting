@@ -5,20 +5,23 @@ import type { ReactNode } from "react";
 import type { DashboardProject, NotifyChannelKey, NotifyChannels, Reminder, ReminderChannelKey } from "@/lib/dashboard-data";
 import GoogleG from "@/components/google-g";
 import SidePanel from "@/components/side-panel";
+import { MAX_PHOTOS_LIMIT, MAX_PHOTO_SIZE_LIMIT_KB } from "@/lib/photo-upload";
 import { MAX_ALLOWED_DOMAINS } from "@/lib/widget-domains";
 
 type Sentiment = "positive" | "neutral" | "negative";
-type SectionKey = "reviews" | "reminders" | "queue" | "protection";
+type SectionKey = "reviews" | "form" | "reminders" | "queue" | "protection";
 type ReminderUnit = "minutes" | "hours" | "days" | "weeks";
 
 const MENU: Array<{ id: SectionKey; label: string }> = [
   { id: "protection", label: "Protection & Settings" },
   { id: "reviews", label: "Reviews" },
+  { id: "form", label: "Review form" },
   { id: "reminders", label: "Reminders" },
   { id: "queue", label: "Queue" },
 ];
 const PAGE_COPY: Record<SectionKey, { title: string; description: string }> = {
   reviews: { title: "Reviews", description: "Choose how customer reviews are classified, published, and answered." },
+  form: { title: "Review form", description: "Set up the form customers fill in: photos, required fields, and privacy options." },
   reminders: { title: "Reminders", description: "Set up automatic review invitations after a customer visit or order." },
   queue: { title: "Publication queue", description: "Control publication limits and priority rules for queued reviews." },
   protection: { title: "Protection & Settings", description: "Control the widget domains, public widget fields, form privacy, Google reviews, and spam filters." },
@@ -294,6 +297,32 @@ export default function ReputationHub({ project, onSaved, onToast, onPreview }: 
     </>;
   }
 
+  function formSettings() {
+    return <>
+      <Section title="Photos in reviews" description="Let customers attach photos of their experience.">
+        <SwitchRow label="Allow photos in reviews" checked={form.allowPhotos} onChange={value => set("allowPhotos", value)} help="When off, the photo field disappears from the widget form and the API rejects attachments." />
+        {form.allowPhotos
+          ? <>
+            <SettingRow label="Photos per review" htmlFor="rep-max-photos" help="Photos are stored with the review, so keep the number small." hint={`1–${MAX_PHOTOS_LIMIT} photos.`}>
+              <input id="rep-max-photos" type="number" min={1} max={MAX_PHOTOS_LIMIT} className="rep-input short" value={form.maxPhotos} onChange={event => set("maxPhotos", Number(event.target.value))} />
+            </SettingRow>
+            <SettingRow label="Maximum photo size, KB" htmlFor="rep-photo-size" help="The widget compresses every photo to fit this limit before uploading." hint={`64–${MAX_PHOTO_SIZE_LIMIT_KB} KB.`}>
+              <input id="rep-photo-size" type="number" min={64} max={MAX_PHOTO_SIZE_LIMIT_KB} step={64} className="rep-input short" value={form.maxPhotoSizeKb} onChange={event => set("maxPhotoSizeKb", Number(event.target.value))} />
+            </SettingRow>
+          </>
+          : <p className="rep-settings-note">Photo attachments are disabled: customers can submit a rating and a comment only.</p>}
+      </Section>
+      <Section title="Form fields" description="Control what customers can submit through your widget.">
+        <SwitchRow label="Allow anonymous reviews" checked={form.allowAnonymousReviews} onChange={value => set("allowAnonymousReviews", value)} help="The company keeps the submitted details in the admin panel, while the public review is shown as Anonymous." />
+        <SwitchRow label="Require written review text" checked={form.reviewTextRequired} onChange={value => set("reviewTextRequired", value)} help="When off, customers can submit only a star rating. Any non-empty comment still follows the minimum length below." />
+        <SettingRow label="Minimum review length" htmlFor="rep-min-length" hint={form.reviewTextRequired ? "Required comments must meet this length." : "Optional comments must meet this length when provided."}><input id="rep-min-length" type="number" min={0} max={2000} className="rep-input short" value={form.minReviewLength} onChange={event => set("minReviewLength", Number(event.target.value))} /></SettingRow>
+        <SettingRow label="Preview and install" help="Check how the form looks on your website and copy the embed code.">
+          <button type="button" className="rep-link" onClick={() => onPreview(form)}>Open the widget preview →</button>
+        </SettingRow>
+      </Section>
+    </>;
+  }
+
   function reminderSettings() {
     return <>
       <Section title="Reminder schedule" description="Choose when reminders are sent automatically." action={<button type="button" className="rep-button" onClick={addReminder}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true"><path d="M12 4v16M4 12h16" /></svg>Add reminder</button>}>
@@ -357,10 +386,10 @@ export default function ReputationHub({ project, onSaved, onToast, onPreview }: 
           <input id="rep-support-url" className="rep-input" type="url" placeholder="https://wa.me/15550000000" value={form.supportChatUrl} onChange={event => set("supportChatUrl", event.target.value)} />
         </SettingRow>
       </Section>
-      <Section title="Review form settings" description="Control what customers can submit through your widget.">
-        <SwitchRow label="Allow anonymous reviews" checked={form.allowAnonymousReviews} onChange={value => set("allowAnonymousReviews", value)} help="The company keeps the submitted details in the admin panel, while the public review is shown as Anonymous." />
-        <SwitchRow label="Require written review text" checked={form.reviewTextRequired} onChange={value => set("reviewTextRequired", value)} help="When off, customers can submit only a star rating. Any non-empty comment still follows the minimum length below." />
-        <SettingRow label="Minimum review length" htmlFor="rep-min-length" hint={form.reviewTextRequired ? "Required comments must meet this length." : "Optional comments must meet this length when provided."}><input id="rep-min-length" type="number" min={0} max={2000} className="rep-input short" value={form.minReviewLength} onChange={event => set("minReviewLength", Number(event.target.value))} /></SettingRow>
+      <Section title="Review form settings" description="Photos, required fields, and privacy options live on the Review form page.">
+        <SettingRow label="Review form" help="Photo attachments, anonymous reviews, and required review text are configured on a dedicated page.">
+          <button type="button" className="rep-link" onClick={() => setSection("form")}>Open Review form settings →</button>
+        </SettingRow>
       </Section>
       <Section title="Public review card" description="Choose what website visitors can see in each review.">
         <SwitchRow label="Show avatar" checked={form.publicShowAvatar} onChange={value => set("publicShowAvatar", value)} />
@@ -383,10 +412,11 @@ export default function ReputationHub({ project, onSaved, onToast, onPreview }: 
       <div className="rep-sheet">
         <header className="rep-sheet-header"><h2>{copy.title}</h2><p>{copy.description}</p></header>
         {section === "reviews" && reviewSettings()}
+        {section === "form" && formSettings()}
         {section === "reminders" && reminderSettings()}
         {section === "queue" && queueSettings()}
         {section === "protection" && protectionSettings()}
-        <div className="rep-footer"><span aria-live="polite">{dirty ? "You have unsaved changes" : "All settings are up to date"}</span><div className="rep-footer-actions">{dirty && <button type="button" className="rep-button quiet" disabled={saving} onClick={() => { setForm(project); setUnits(Object.fromEntries(project.reminders.map(item => [item.id, inferUnit(item.delayMinutes)]))); }}>Discard changes</button>}<button type="button" className="rep-button primary" disabled={saving || !dirty} onClick={() => void save()}>{saving ? "Saving…" : "Save changes"}</button></div></div>
+        <div className="rep-footer"><span aria-live="polite">{dirty ? "You have unsaved changes" : "All settings are up to date"}</span><div className="rep-footer-actions"><button type="button" className="rep-button quiet" onClick={() => onPreview(form)}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></svg>Widget preview</button>{dirty && <button type="button" className="rep-button quiet" disabled={saving} onClick={() => { setForm(project); setUnits(Object.fromEntries(project.reminders.map(item => [item.id, inferUnit(item.delayMinutes)]))); }}>Discard changes</button>}<button type="button" className="rep-button primary" disabled={saving || !dirty} onClick={() => void save()}>{saving ? "Saving…" : "Save changes"}</button></div></div>
       </div>
     </div>
     <SidePanel open={!!editingReminder} onClose={() => setEditingId(null)} title="Edit reminder message" subtitle="Write the message customers will receive." closeLabel="Close message editor" width={480} footer={<div className="rep-message-footer"><button type="button" className="rep-button quiet" onClick={() => setEditingId(null)}>Cancel</button><button type="button" className="rep-button primary" disabled={!messageDraft.trim()} onClick={() => { if (editingReminder) updateReminder(editingReminder.id, { message: messageDraft.trim() }); setEditingId(null); }}>Save message</button></div>}>

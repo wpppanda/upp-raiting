@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useCallback, useEffect } from "react";
-import type { DashboardReview, DashboardProject, DashboardData } from "@/lib/dashboard-data";
+import type { DashboardReview, DashboardProject, DashboardData, ReviewAuthorKind } from "@/lib/dashboard-data";
 import AppHeader from "@/components/app-header";
 import ReputationHub from "@/components/reputation-hub";
 import WidgetDrawer, { type PreviewKind } from "@/components/widget-drawer";
@@ -9,6 +9,7 @@ import StatsPanel from "@/components/stats-panel";
 import ReviewActionsDrawer from "@/components/review-actions-drawer";
 import type { ActionOptions, ActionResult, ReviewAction } from "@/components/review-actions";
 import type { FollowUp } from "@/lib/follow-up";
+import { compressImageFile, MAX_PHOTOS_LIMIT } from "@/lib/photo-upload";
 import GoogleG from "@/components/google-g";
 
 export type { DashboardReview, DashboardProject, DashboardData };
@@ -17,6 +18,7 @@ export type { DashboardReview, DashboardProject, DashboardData };
 export type MainView =
   | "reviews"
   | "queue"
+  | "install"
   | "moderation"
   | "analytics"
   | "widgets"
@@ -142,6 +144,13 @@ function SidebarIcon({ name, active }: { name: string; active?: boolean }) {
           <circle cx="12" cy="12" r="3" />
         </svg>
       );
+    case "plug":
+      return (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="16 18 22 12 16 6" />
+          <polyline points="8 6 2 12 8 18" />
+        </svg>
+      );
     default:
       return null;
   }
@@ -245,12 +254,25 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
   // New Review Form State
   const [newAuthorName, setNewAuthorName] = useState("");
   const [newAuthorEmail, setNewAuthorEmail] = useState("");
+  const [newAuthorCity, setNewAuthorCity] = useState("");
   const [newRating, setNewRating] = useState(5);
   const [newContent, setNewContent] = useState("");
+  /**
+   * An employee can enter a review manually — either as themselves or on behalf
+   * of a customer — while the employee who typed it is always recorded.
+   */
+  const [newAuthorKind, setNewAuthorKind] = useState<ReviewAuthorKind>("customer");
+  const [newAddedBy, setNewAddedBy] = useState("Administrator");
+  const [newPhotos, setNewPhotos] = useState<string[]>([]);
+  const [newPhotoNote, setNewPhotoNote] = useState("");
+  const [photosBusy, setPhotosBusy] = useState(false);
 
   // Widget preview sandbox + right drawer
   const [widgetType, setWidgetType] = useState<"reviews" | "form" | "badge" | "all-in-one">("reviews");
   const [copiedSnippet, setCopiedSnippet] = useState(false);
+  // Install guide (sidebar page after the publication queue)
+  const [installKind, setInstallKind] = useState<PreviewKind>("reviews");
+  const [installCopied, setInstallCopied] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewKind, setPreviewKind] = useState<PreviewKind>("reviews");
   const [previewProject, setPreviewProject] = useState<DashboardProject | null>(null);
@@ -346,8 +368,77 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
     throw new Error("This action is not available.");
   };
 
-  // Submit New Review
-  const handleCreateReview = async (e: React.FormEvent) => {
+  /** Photo rules of the current project, shared by the widget sandbox and Add review. */
+  const photoRules = {
+    allowPhotos: data.project.allowPhotos !== false,
+    maxPhotos: Math.max(1, Math.min(MAX_PHOTOS_LIMIT, data.project.maxPhotos || 1)),
+    maxPhotoSizeKb: Math.max(64, data.project.maxPhotoSizeKb || 64),
+  };
+
+  /** Compresses the picked files and adds them to the pending review. */
+  const attachPhotos = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const room = photoRules.maxPhotos - newPhotos.length;
+    if (room <= 0) {
+      setNewPhotoNote(`You can attach up to ${photoRules.maxPhotos} photos.`);
+      return;
+    }
+    setPhotosBusy(true);
+    setNewPhotoNote("");
+    let failure = "";
+    const prepared: string[] = [];
+    for (const file of Array.from(files).slice(0, room)) {
+      try {
+        prepared.push(await compressImageFile(file, photoRules.maxPhotoSizeKb));
+      } catch (error) {
+        failure = error instanceof Error ? error.message : "This photo could not be added.";
+      }
+    }
+    if (prepared.length) setNewPhotos((current) => [...current, ...prepared].slice(0, photoRules.maxPhotos));
+    if (failure) setNewPhotoNote(failure);
+    setPhotosBusy(false);
+  };
+
+  const photoField = (compact: boolean) => (
+    <div className={compact ? "space-y-1.5" : "space-y-2"}>
+      <div className="flex items-center gap-2">
+        <label className={`block font-semibold text-slate-700 ${compact ? "text-[11px]" : "text-xs"}`}>
+          Photos <span className="font-normal text-slate-400">(optional)</span>
+        </label>
+        {photosBusy && <span className="text-[11px] text-slate-400">Compressing…</span>}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        {newPhotos.map((photo, index) => (
+          <span key={`pending-photo-${index}`} className="relative block h-16 w-16 overflow-hidden rounded-lg border border-slate-200">
+            <img src={photo} alt={`Attached photo ${index + 1}`} className="h-16 w-16 object-cover" />
+            <button
+              type="button"
+              aria-label={`Remove photo ${index + 1}`}
+              onClick={() => setNewPhotos((current) => current.filter((_, i) => i !== index))}
+              className="absolute right-0.5 top-0.5 grid h-5 w-5 place-items-center rounded-full bg-slate-700/85 text-[11px] leading-none text-white"
+            >✕</button>
+          </span>
+        ))}
+        <label className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-dashed border-slate-300 px-3 text-slate-600 hover:bg-slate-50 ${compact ? "py-1.5 text-[11px]" : "py-2 text-xs"}`}>
+          {newPhotos.length >= photoRules.maxPhotos ? "Photo limit reached" : "Add photos"}
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            disabled={photosBusy || newPhotos.length >= photoRules.maxPhotos}
+            onChange={(event) => { void attachPhotos(event.target.files); event.target.value = ""; }}
+          />
+        </label>
+      </div>
+      <p className={`text-slate-400 ${newPhotoNote ? "text-rose-600" : compact ? "text-[10px]" : "text-[11px]"}`}>
+        {newPhotoNote || `Up to ${photoRules.maxPhotos} photos, ${photoRules.maxPhotoSizeKb} KB each. Large photos are compressed automatically.`}
+      </p>
+    </div>
+  );
+
+  // Submit New Review — from the widget sandbox (a customer) or from Add review (an employee)
+  const handleCreateReview = async (e: React.FormEvent, origin: "widget" | "admin" = "widget") => {
     e.preventDefault();
     if (!newAuthorName.trim()) {
       showToast("Enter an author name.");
@@ -361,8 +452,12 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
         body: JSON.stringify({
           authorName: newAuthorName.trim(),
           authorEmail: newAuthorEmail.trim() || undefined,
+          authorCity: newAuthorCity.trim() || undefined,
           rating: newRating,
           content: newContent.trim(),
+          photos: newPhotos,
+          authorKind: origin === "admin" ? newAuthorKind : "customer",
+          addedBy: origin === "admin" ? newAddedBy.trim() || undefined : undefined,
         }),
       });
       const result = await res.json().catch(() => ({} as Record<string, unknown>));
@@ -378,8 +473,11 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
         setNewReviewModalOpen(false);
         setNewAuthorName("");
         setNewAuthorEmail("");
+        setNewAuthorCity("");
         setNewContent("");
         setNewRating(5);
+        setNewPhotos([]);
+        setNewPhotoNote("");
       } else {
         showToast(String(result.error ?? "") || "Unable to create the review.");
       }
@@ -553,6 +651,17 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
     return `<script src="${origin}/widget.js" data-project-id="${data.project.id}" defer></script>\n<div data-widget="${widgetType}"></div>`;
   }, [data.project.id, widgetType]);
 
+  const INSTALL_KINDS: Array<{ id: PreviewKind; label: string; description: string }> = [
+    { id: "reviews", label: "Review feed", description: "The list of published reviews." },
+    { id: "form", label: "Review form", description: "The form customers fill in, with the thank-you screen after submission." },
+    { id: "badge", label: "Rating badge", description: "A compact rating summary." },
+    { id: "all-in-one", label: "All-in-one", description: "Badge, feed, and form together." },
+  ];
+  const installSnippet = useMemo(() => {
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://otklik.ru";
+    return `<script src="${origin}/widget.js" data-project-id="${data.project.id}" defer></script>\n<div data-widget="${installKind}"></div>`;
+  }, [data.project.id, installKind]);
+
   return (
     <div className="uppointment-shell min-h-screen bg-[#F7F7FC] flex flex-col font-sans">
       <AppHeader
@@ -595,6 +704,16 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
             title="Publication queue"
           >
             <SidebarIcon name="calendar" active={currentView === "queue"} />
+          </button>
+
+          <button
+            onClick={() => setCurrentView("install")}
+            className={`w-11 h-11 flex items-center justify-center rounded-xl transition-all ${
+              currentView === "install" ? "bg-blue-50 text-blue-600 shadow-sm" : "text-slate-500 hover:bg-slate-100"
+            }`}
+            title="Install the widget on your website"
+          >
+            <SidebarIcon name="plug" active={currentView === "install"} />
           </button>
 
           <button
@@ -1058,6 +1177,16 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
                                 <p className={`text-[13px] leading-snug text-slate-700 line-clamp-2 ${review.hiddenText ? "italic text-slate-400" : ""}`}>
                                   {reviewText}
                                 </p>
+                                <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                                  {(review.photos ?? []).length > 0 && (
+                                    <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600" title="Attached photos">
+                                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" /><circle cx="12" cy="13" r="3" /></svg>
+                                      {(review.photos ?? []).length}
+                                    </span>
+                                  )}
+                                  {review.authorKind === "employee" && <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-700">Employee review</span>}
+                                  {review.addedBy && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">Added by {review.addedBy}</span>}
+                                </div>
                                 {review.companyReply && (
                                   <p className="mt-1 text-[11px] text-slate-500 line-clamp-1">
                                     <span className="font-semibold text-slate-600">Reply:</span> {review.companyReply}
@@ -1888,13 +2017,20 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
                   </div>
 
                   {/* Bottom Save Action Button matching screenshot */}
-                  <div className="flex justify-center pt-4">
+                  <div className="flex justify-center gap-3 pt-4">
                     <button
                       onClick={handleSaveSettings}
                       disabled={isSubmitting}
                       className="px-16 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-sm shadow-md transition-colors"
                     >
-                      {isSubmitting ? "Saving..." : "Save"}
+                      {isSubmitting ? "Saving..." : "Save changes"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setPreviewProject(null); setPreviewKind("form"); setPreviewOpen(true); }}
+                      className="px-6 py-3 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg font-semibold text-sm transition-colors"
+                    >
+                      Widget preview
                     </button>
                   </div>
                 </div>
@@ -2045,7 +2181,7 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
                   )}
 
                   {(widgetType === "form" || widgetType === "all-in-one") && !previewThanks && (
-                    <form onSubmit={handleCreateReview} className="max-w-md bg-white p-5 rounded-xl border border-slate-200 space-y-3">
+                    <form onSubmit={(event) => void handleCreateReview(event, "widget")} className="max-w-md bg-white p-5 rounded-xl border border-slate-200 space-y-3">
                       <div className="font-bold text-slate-900 text-sm">Leave a review</div>
                       <div>
                         <div className="flex gap-1 text-xl text-amber-400 cursor-pointer mb-2">
@@ -2083,6 +2219,7 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
                         maxLength={2000}
                         className="w-full border border-slate-200 rounded-lg p-2 text-xs"
                       />
+                      {photoRules.allowPhotos && photoField(true)}
                       <button
                         type="submit"
                         disabled={isSubmitting}
@@ -2255,6 +2392,116 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
             </div>
           )}
 
+          {currentView === "install" && (
+            <div className="space-y-4">
+              <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h1 className="text-lg font-bold text-slate-900">Install the widget on your website</h1>
+                    <p className="mt-1 text-sm text-slate-500">Four steps: allow your domain, choose the block, paste the code, and check the result.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setPreviewProject(null); setPreviewKind(installKind); setPreviewOpen(true); }}
+                    className="shrink-0 px-4 py-2 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg text-xs font-semibold transition-colors"
+                  >Widget preview</button>
+                </div>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                <section className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm" aria-label="Step 1: allow your domain">
+                  <h2 className="text-sm font-bold text-slate-800"><span className="mr-2 inline-grid h-5 w-5 place-items-center rounded-full bg-blue-600 text-[11px] text-white">1</span>Allow your domain</h2>
+                  <p className="mt-2 text-xs leading-relaxed text-slate-500">The widget only loads on the domains connected to the project. Add every domain and subdomain where it will be shown.</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs text-emerald-800">
+                      {data.project.domain}<span className="text-[10px] font-semibold uppercase">primary</span>
+                    </span>
+                    {(data.project.allowedDomains ?? []).filter(Boolean).map((domain) => (
+                      <span key={domain} className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700">{domain}</span>
+                    ))}
+                    {!(data.project.allowedDomains ?? []).filter(Boolean).length && (
+                      <span className="text-xs text-slate-400 self-center">No extra domains yet.</span>
+                    )}
+                  </div>
+                  <button type="button" className="rep-link mt-3 text-xs font-semibold text-blue-700 hover:underline" onClick={() => setCurrentView("reputation")}>
+                    Manage domains in Business reputation →
+                  </button>
+                </section>
+
+                <section className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm" aria-label="Step 2: choose the block">
+                  <h2 className="text-sm font-bold text-slate-800"><span className="mr-2 inline-grid h-5 w-5 place-items-center rounded-full bg-blue-600 text-[11px] text-white">2</span>Choose what to show</h2>
+                  <div className="mt-3 grid gap-2">
+                    {INSTALL_KINDS.map((kind) => (
+                      <label key={kind.id} className={`flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2 transition-colors ${installKind === kind.id ? "border-blue-600 bg-blue-50" : "border-slate-200 hover:bg-slate-50"}`}>
+                        <input type="radio" name="install-kind" className="mt-0.5" checked={installKind === kind.id} onChange={() => setInstallKind(kind.id)} />
+                        <span>
+                          <span className="block text-xs font-semibold text-slate-800">{kind.label}</span>
+                          <span className="block text-[11px] text-slate-500">{kind.description}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm lg:col-span-2" aria-label="Step 3: paste the code">
+                  <h2 className="text-sm font-bold text-slate-800"><span className="mr-2 inline-grid h-5 w-5 place-items-center rounded-full bg-blue-600 text-[11px] text-white">3</span>Paste the code before <code className="rounded bg-slate-100 px-1 py-0.5 text-[11px]">&lt;/body&gt;</code></h2>
+                  <p className="mt-2 text-xs leading-relaxed text-slate-500">Add both lines to the page template. The script loads the widget, the <code className="rounded bg-slate-100 px-1 py-0.5 text-[11px]">div</code> marks where it appears. Add as many <code className="rounded bg-slate-100 px-1 py-0.5 text-[11px]">div</code> blocks as you need.</p>
+                  <pre className="mt-3 overflow-x-auto rounded-lg bg-slate-900 p-4 text-[12px] leading-relaxed text-slate-100"><code>{installSnippet}</code></pre>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors"
+                      onClick={() => { navigator.clipboard.writeText(installSnippet); setInstallCopied(true); window.setTimeout(() => setInstallCopied(false), 2000); }}
+                    >{installCopied ? "✓ Copied" : "Copy code"}</button>
+                    <button type="button" className="px-4 py-2 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg text-xs font-semibold transition-colors" onClick={() => setCurrentView("widgets")}>
+                      Open Widgets &amp; Embed SDK
+                    </button>
+                  </div>
+                </section>
+
+                <section className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm" aria-label="Step 4: check the widget">
+                  <h2 className="text-sm font-bold text-slate-800"><span className="mr-2 inline-grid h-5 w-5 place-items-center rounded-full bg-blue-600 text-[11px] text-white">4</span>Check the result</h2>
+                  <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-xs leading-relaxed text-slate-600">
+                    <li>Save the page template and publish it.</li>
+                    <li>Open the page in a private window and reload it without cache.</li>
+                    <li>Submit a test review — it appears in Moderation or the queue depending on your publication rules.</li>
+                    <li>Check the thank-you screen: positive reviews invite to Google, neutral and negative ones offer support.</li>
+                  </ol>
+                  <button
+                    type="button"
+                    onClick={() => { setPreviewProject(null); setPreviewKind(installKind); setPreviewOpen(true); }}
+                    className="mt-3 px-4 py-2 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg text-xs font-semibold transition-colors"
+                  >Open the widget preview</button>
+                </section>
+
+                <section className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm" aria-label="Troubleshooting">
+                  <h2 className="text-sm font-bold text-slate-800">If the widget does not appear</h2>
+                  <ul className="mt-2 space-y-2 text-xs leading-relaxed text-slate-600">
+                    <li><span className="font-semibold text-slate-800">“This domain is not connected to the project.”</span> — the page domain is missing from the allow-list. Add it in step 1.</li>
+                    <li><span className="font-semibold text-slate-800">The script is blocked</span> — check the Content-Security-Policy of your site: it must allow <code className="rounded bg-slate-100 px-1 py-0.5 text-[11px]">script-src</code> and <code className="rounded bg-slate-100 px-1 py-0.5 text-[11px]">connect-src</code> for this domain.</li>
+                    <li><span className="font-semibold text-slate-800">The feed is empty</span> — only published reviews are shown. Approve a review in Moderation first.</li>
+                    <li><span className="font-semibold text-slate-800">No photo field in the form</span> — enable photos in Business reputation → Review form.</li>
+                  </ul>
+                </section>
+
+                <section className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm lg:col-span-2" aria-label="API for a custom integration">
+                  <h2 className="text-sm font-bold text-slate-800">Building your own front end?</h2>
+                  <p className="mt-2 text-xs leading-relaxed text-slate-500">The same data the widget uses is available over a public JSON API. Requests are accepted only from the allowed domains.</p>
+                  <div className="mt-3 grid gap-2 text-[12px] sm:grid-cols-2">
+                    <div className="rounded-lg border border-slate-200 p-3">
+                      <div className="font-semibold text-slate-800">GET /api/v1/projects/{data.project.id.slice(0, 8)}…/reviews</div>
+                      <p className="mt-1 text-[11px] text-slate-500">Published reviews, the rating summary, and the form settings.</p>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 p-3">
+                      <div className="font-semibold text-slate-800">POST /api/v1/projects/{data.project.id.slice(0, 8)}…/reviews</div>
+                      <p className="mt-1 text-[11px] text-slate-500">Submit a review, with photos when they are enabled. Returns the thank-you follow-up.</p>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </div>
+          )}
+
           {currentView === "reputation" && (
             <ReputationHub
               project={data.project}
@@ -2310,14 +2557,42 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
               <h2 className="text-base font-bold text-slate-900">Add a review</h2>
               <button onClick={() => setNewReviewModalOpen(false)} className="text-slate-400 hover:text-slate-600 text-lg font-bold">✕</button>
             </div>
-            <form onSubmit={handleCreateReview} className="space-y-4">
+            <form onSubmit={(event) => void handleCreateReview(event, "admin")} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Author name *</label>
-                <input type="text" required placeholder="For example, Alex P." value={newAuthorName} onChange={(e) => setNewAuthorName(e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800" />
+                <span className="block text-xs font-semibold text-slate-700 mb-1.5">Who is the author?</span>
+                <div className="flex gap-2" role="radiogroup" aria-label="Review author">
+                  {([["customer", "Customer"], ["employee", "Me (employee)"]] as const).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      role="radio"
+                      aria-checked={newAuthorKind === value}
+                      onClick={() => setNewAuthorKind(value)}
+                      className={`flex-1 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${newAuthorKind === value ? "border-blue-600 bg-blue-50 text-blue-700" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+                    >{label}</button>
+                  ))}
+                </div>
+                <p className="mt-1.5 text-[11px] text-slate-400">
+                  {newAuthorKind === "employee"
+                    ? "The review is published under your employee name. Use it for feedback received by phone, in chat, or on paper."
+                    : "Enter the review on behalf of a customer — their name is shown publicly."}
+                </p>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Email</label>
-                <input type="email" placeholder="alex@example.com" value={newAuthorEmail} onChange={(e) => setNewAuthorEmail(e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800" />
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  {newAuthorKind === "employee" ? "Employee name *" : "Customer name *"}
+                </label>
+                <input type="text" required placeholder={newAuthorKind === "employee" ? "For example, Maria (manager)" : "For example, Alex P."} value={newAuthorName} onChange={(e) => setNewAuthorName(e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Email</label>
+                  <input type="email" placeholder="alex@example.com" value={newAuthorEmail} onChange={(e) => setNewAuthorEmail(e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">City</label>
+                  <input type="text" placeholder="Amsterdam" value={newAuthorCity} onChange={(e) => setNewAuthorCity(e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800" />
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Rating *</label>
@@ -2331,6 +2606,14 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Review text <span className="font-normal text-slate-400">(optional)</span></label>
                 <textarea rows={4} maxLength={2000} placeholder="Describe the customer experience (optional)…" value={newContent} onChange={(e) => setNewContent(e.target.value)} className="w-full border border-slate-200 rounded-lg p-3 text-sm text-slate-800" />
+              </div>
+              {photoRules.allowPhotos
+                ? photoField(false)
+                : <p className="text-[11px] text-slate-400">Photo attachments are turned off in Business reputation → Review form.</p>}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Added by</label>
+                <input type="text" maxLength={120} placeholder="Administrator" value={newAddedBy} onChange={(e) => setNewAddedBy(e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800" />
+                <p className="mt-1 text-[11px] text-slate-400">The employee who enters this review. Visible in the review panel and in exports.</p>
               </div>
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={() => setNewReviewModalOpen(false)} className="px-4 py-2 border border-slate-200 text-slate-700 rounded-lg text-sm font-medium">Cancel</button>

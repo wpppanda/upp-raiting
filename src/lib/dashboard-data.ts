@@ -2,9 +2,11 @@ import { and, asc, desc, eq, isNull, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { decryptEmail } from "@/lib/pii";
 import { releaseBoostedPositives } from "@/lib/publish-rules";
-import { projects, reviews, type NotifyChannels, type Reminder, type ReviewSentiment, type ReviewStatus } from "@/db/schema";
+import { DEFAULT_MAX_PHOTOS, DEFAULT_MAX_PHOTO_SIZE_KB, projects, reviews, type NotifyChannels, type Reminder, type ReviewAuthorKind, type ReviewSentiment, type ReviewStatus } from "@/db/schema";
 
 export type { Reminder, ReminderChannelKey } from "@/db/schema";
+
+export type { ReviewAuthorKind } from "@/db/schema";
 
 export type { NotifyChannels, NotifyChannelKey } from "@/db/schema";
 
@@ -27,6 +29,11 @@ export type DashboardReview = {
   replyAt: Date | null;
   hiddenText: boolean;
   pinned: boolean;
+  /** Photo attachments as data URLs, in the order the author added them. */
+  photos: string[];
+  authorKind: ReviewAuthorKind;
+  /** Employee who entered the review manually in the admin panel. */
+  addedBy: string | null;
 };
 
 export type DashboardProject = {
@@ -67,6 +74,10 @@ export type DashboardProject = {
   googleReviewUrl: string;
   allowAnonymousReviews: boolean;
   reviewTextRequired: boolean;
+  /** Customers may attach photos to a review through the widget form. */
+  allowPhotos: boolean;
+  maxPhotos: number;
+  maxPhotoSizeKb: number;
   publicShowCity: boolean;
   publicShowDate: boolean;
   publicShowName: boolean;
@@ -305,12 +316,24 @@ async function syncDemoReviews() {
  */
 let schemaReady: Promise<void> | null = null;
 function ensureSchema(): Promise<void> {
-  schemaReady ??= db
-    .execute(sql`alter table "projects" add column if not exists "allowed_domains" jsonb not null default '[]'::jsonb`)
-    .then(() => undefined)
-    .catch((error) => {
-      console.warn("Widget domain allow-list column check skipped:", error instanceof Error ? error.message : error);
-    });
+  schemaReady ??= (async () => {
+    const statements = [
+      sql`alter table "projects" add column if not exists "allowed_domains" jsonb not null default '[]'::jsonb`,
+      sql`alter table "projects" add column if not exists "allow_photos" boolean not null default true`,
+      sql`alter table "projects" add column if not exists "max_photos" integer not null default ${DEFAULT_MAX_PHOTOS}`,
+      sql`alter table "projects" add column if not exists "max_photo_size_kb" integer not null default ${DEFAULT_MAX_PHOTO_SIZE_KB}`,
+      sql`alter table "reviews" add column if not exists "photos" jsonb not null default '[]'::jsonb`,
+      sql`alter table "reviews" add column if not exists "author_kind" varchar(16) not null default 'customer'`,
+      sql`alter table "reviews" add column if not exists "added_by" varchar(120)`,
+    ];
+    for (const statement of statements) {
+      try {
+        await db.execute(statement);
+      } catch (error) {
+        console.warn("Schema column check skipped:", error instanceof Error ? error.message : error);
+      }
+    }
+  })();
   return schemaReady;
 }
 

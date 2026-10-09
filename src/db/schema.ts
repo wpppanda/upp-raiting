@@ -12,6 +12,12 @@ import {
 
 export type ReviewStatus = "pending" | "queued" | "published" | "rejected" | "spam";
 export type ReviewSentiment = "positive" | "neutral" | "negative";
+/** Who wrote the review: the customer, or a company employee adding it manually. */
+export type ReviewAuthorKind = "customer" | "employee";
+
+/** Attachments are stored as data URLs (or https links); the widget compresses before upload. */
+export const DEFAULT_MAX_PHOTOS = 3;
+export const DEFAULT_MAX_PHOTO_SIZE_KB = 400;
 
 export type NotifyChannelKey = "email" | "whatsapp" | "sms";
 export type NotifyChannels = Record<NotifyChannelKey, { enabled: boolean; value: string }>;
@@ -88,6 +94,10 @@ export const projects = pgTable("projects", {
   // ── Поля формы и публичная карточка отзыва ──
   allowAnonymousReviews: boolean("allow_anonymous_reviews").notNull().default(true),
   reviewTextRequired: boolean("review_text_required").notNull().default(false),
+  /** Customers may attach photos to a review through the widget form. */
+  allowPhotos: boolean("allow_photos").notNull().default(true),
+  maxPhotos: integer("max_photos").notNull().default(DEFAULT_MAX_PHOTOS),
+  maxPhotoSizeKb: integer("max_photo_size_kb").notNull().default(DEFAULT_MAX_PHOTO_SIZE_KB),
   publicShowCity: boolean("public_show_city").notNull().default(false),
   publicShowDate: boolean("public_show_date").notNull().default(true),
   publicShowName: boolean("public_show_name").notNull().default(true),
@@ -148,6 +158,11 @@ export const reviews = pgTable(
     replyAt: timestamp("reply_at", { withTimezone: true }),
     hiddenText: boolean("hidden_text").notNull().default(false),
     pinned: boolean("pinned").notNull().default(false),
+    /** Photo attachments as data URLs, in the order the author added them. */
+    photos: jsonb("photos").$type<string[]>().notNull().default([]),
+    authorKind: varchar("author_kind", { length: 16 }).$type<ReviewAuthorKind>().notNull().default("customer"),
+    /** Employee who entered this review manually in the admin panel. */
+    addedBy: varchar("added_by", { length: 120 }),
   },
   (table) => ({
     projectCreatedIndex: index("reviews_project_created_idx").on(table.projectId, table.createdAt),

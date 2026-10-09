@@ -50,7 +50,7 @@ window.print = () => {};
 window.matchMedia = window.matchMedia || (() => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
 
 window.eval(demoData);
-check("demo data is provided before the bundle runs", Array.isArray(window.__UPP_DEMO__.reviews) && window.__UPP_DEMO__.reviews.length === 12);
+check("demo data is provided before the bundle runs", Array.isArray(window.__UPP_DEMO__.reviews) && window.__UPP_DEMO__.reviews.length >= 12);
 window.eval(bundle);
 
 const doc = window.document;
@@ -127,6 +127,11 @@ const bodyText = () => doc.body.textContent;
     console.log("PROTOTYPE:", JSON.stringify(JSON.parse(fromPrototype).map((g) => [g.title, g.rows.map((r) => r.label + "/" + r.className)])));
   }
   check("the drawer body is identical to the app component markup", fromPrototype === fromApp);
+  const photoCount = (scope) => {
+    const block = scope.querySelector("[data-review-photos]");
+    return block ? block.querySelectorAll("img").length : -1;
+  };
+  check("the drawer shows the attached photos", photoCount(dialog) === (review.photos ?? []).length && photoCount(dialog) === photoCount(holder));
   const statusLabels = { published: "Published", pending: "Pending moderation", queued: "In queue", rejected: "Rejected", spam: "Spam" };
   check("the drawer shows the review summary block",
     dialog.textContent.indexOf(statusLabels[review.status]) !== -1 &&
@@ -172,6 +177,64 @@ const bodyText = () => doc.body.textContent;
   await flush();
   check("the thank-you screen appears after submitting", !!doc.querySelector("[data-widget-thanks]") && /Thank you for your feedback!/.test(bodyText()));
   check("the positive level offers the Google invitation", /Leave a review on Google/.test(bodyText()));
+
+  /* ── 5. Photos, employee reviews, the install page, and form settings ── */
+  await click(doc.querySelector('button[title="All reviews"]'));
+  const withPhotos = window.__UPP_DEMO__.reviews.filter((candidate) => (candidate.photos ?? []).length > 0)[0];
+  await click(doc.querySelector('button[aria-label="Open actions for ' + withPhotos.authorName + '"]'));
+  const photoDialog = doc.querySelector("dialog.side-panel");
+  check("a review with attachments shows them in the panel", photoDialog.querySelectorAll("[data-review-photos] img").length === withPhotos.photos.length);
+  const employee = window.__UPP_DEMO__.reviews.filter((candidate) => candidate.authorKind === "employee")[0];
+  await click(doc.querySelector('button[aria-label="Open actions for ' + employee.authorName + '"]'));
+  await flush();
+  const employeeDialog = doc.querySelector("dialog.side-panel");
+  check("an employee review says who the author is", /Author · employee/.test(employeeDialog.textContent));
+  check("an employee review says who added it", ("Added by · " + employee.addedBy).split("").length > 0 && employeeDialog.textContent.indexOf("Added by · " + employee.addedBy) !== -1);
+  await click(employeeDialog.querySelector(".panel-close"));
+  await sleep(260);
+
+  // Add review: on behalf of a customer, or as the employee who types it in.
+  await click(doc.querySelector('button[title="Add review"]'));
+  const modal = Array.prototype.slice.call(doc.querySelectorAll("form")).filter((form) => /Who is the author\?/.test(form.textContent))[0];
+  check("the add-review form asks who the author is", !!modal);
+  check("both author kinds are offered", /Customer/.test(modal.textContent) && /Me \(employee\)/.test(modal.textContent));
+  const authorButton = Array.prototype.slice.call(modal.querySelectorAll('button[role="radio"]')).filter((button) => /Me \(employee\)/.test(button.textContent))[0];
+  await click(authorButton);
+  check("the employee mode renames the author field", /Employee name/.test(modal.textContent) && /Added by/.test(modal.textContent));
+  const nameInput = modal.querySelector('input[type="text"][required]');
+  Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set.call(nameInput, "Maria (manager)");
+  nameInput.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await flush();
+  modal.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
+  await flush();
+  const added = window.__UPP_DEMO__.reviews[0];
+  check("the employee review is stored with its author kind", added.authorKind === "employee" && added.authorName === "Maria (manager)");
+  check("the employee review records who added it", added.addedBy === "Administrator" && added.source === "Added manually");
+
+  // Photos in the review form follow the project setting.
+  await click(doc.querySelector('button[title="Widgets and embed code"]'));
+  await click(Array.prototype.slice.call(doc.querySelectorAll("button")).filter((button) => /Review form/.test(button.textContent))[0]);
+  check("the widget sandbox offers photo attachments", /Add photos/.test(bodyText()) && /compressed automatically/.test(bodyText()));
+
+  // Review form settings + the preview button next to Save changes.
+  await click(doc.querySelector('button[title="Business reputation — all settings in one place"]'));
+  await click(byText(".rep-navigation button", "Review form"));
+  check("the review form page configures photos", /Allow photos in reviews/.test(bodyText()) && /Photos per review/.test(bodyText()) && /Maximum photo size, KB/.test(bodyText()));
+  const footerButtons = Array.prototype.slice.call(doc.querySelectorAll(".rep-footer-actions button")).map((button) => button.textContent.trim());
+  check("widget preview sits next to Save changes", footerButtons.indexOf("Widget preview") !== -1 && footerButtons[footerButtons.length - 1] === "Save changes");
+  const allowPhotos = doc.querySelector('[aria-label="Allow photos in reviews"][role="switch"]');
+  await click(allowPhotos);
+  check("photos can be turned off", allowPhotos.getAttribute("aria-checked") === "false" && /Photo attachments are disabled/.test(bodyText()));
+  await click(allowPhotos);
+
+  // Installation guide right after the publication queue.
+  await click(doc.querySelector('button[title="Install the widget on your website"]'));
+  check("the install page opens from the sidebar", /Install the widget on your website/.test(bodyText()));
+  check("the install page lists the allowed domains", /Allow your domain/.test(bodyText()) && /zerno\.coffee/.test(bodyText()) && /shop\.zerno\.coffee/.test(bodyText()));
+  check("the install page shows the embed code", /widget\.js/.test(bodyText()) && /data-project-id="9f1c2a44/.test(bodyText()) && /data-widget="reviews"/.test(bodyText()));
+  await click(Array.prototype.slice.call(doc.querySelectorAll('input[name="install-kind"]'))[1]);
+  check("choosing a block changes the snippet", /data-widget="form"/.test(bodyText()));
+  check("the install page explains failures and the API", /This domain is not connected to the project/.test(bodyText()) && /\/api\/v1\/projects\//.test(bodyText()));
 
   check("no runtime errors were thrown", errors.length === 0);
   if (errors.length) console.log(errors);

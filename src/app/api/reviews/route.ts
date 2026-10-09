@@ -1,7 +1,8 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { reviews, type ReviewSentiment, type ReviewStatus } from "@/db/schema";
+import { reviews, type ReviewAuthorKind, type ReviewSentiment, type ReviewStatus } from "@/db/schema";
 import { ensureProject } from "@/lib/dashboard-data";
+import { sanitizePhotos } from "@/lib/photo-upload";
 import { buildFollowUp } from "@/lib/follow-up";
 import { encryptEmail } from "@/lib/pii";
 import { releaseBoostedPositives, shouldBoostPositive } from "@/lib/publish-rules";
@@ -70,6 +71,9 @@ export async function POST(request: Request) {
   const authorEmail = typeof body.authorEmail === "string" ? body.authorEmail.trim().slice(0, 254) : "";
   const authorCity = typeof body.authorCity === "string" ? body.authorCity.trim().slice(0, 120) : "";
   const isAnonymous = body.isAnonymous === true;
+  // An employee of the company can enter a review manually — as themselves or on behalf of a customer.
+  const authorKind: ReviewAuthorKind = body.authorKind === "employee" ? "employee" : "customer";
+  const addedBy = typeof body.addedBy === "string" ? body.addedBy.trim().slice(0, 120) : "";
 
   if (authorName.length < 2 || authorName.length > 120) {
     return Response.json({ error: "Author name must contain 2 to 120 characters." }, { status: 400 });
@@ -98,6 +102,13 @@ export async function POST(request: Request) {
     const sentiment: ReviewSentiment =
       rating >= project.positiveThreshold ? "positive" : rating >= project.neutralThreshold ? "neutral" : "negative";
 
+    const photoCheck = sanitizePhotos(body.photos, {
+      allowPhotos: project.allowPhotos,
+      maxPhotos: project.maxPhotos,
+      maxPhotoSizeKb: project.maxPhotoSizeKb,
+    });
+    if (photoCheck.error) return Response.json({ error: photoCheck.error }, { status: 400 });
+
     const boost = sentiment === "positive" ? await shouldBoostPositive(project.id, project) : false;
     const { status, delay } = resolveStatus(sentiment, project, content, boost);
     const createdAt = new Date();
@@ -112,11 +123,14 @@ export async function POST(request: Request) {
         rating,
         sentiment,
         content,
-        source: "Review form",
+        source: authorKind === "employee" || addedBy ? "Added manually" : "Review form",
         status,
         createdAt,
         scheduledAt: status === "queued" ? new Date(createdAt.getTime() + delay * 60 * 1000) : null,
         publishedAt: status === "published" ? createdAt : null,
+        photos: photoCheck.photos,
+        authorKind,
+        addedBy: addedBy || null,
       })
       .returning();
 

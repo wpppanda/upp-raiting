@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { projects, type NotifyChannelKey, type NotifyChannels, type Reminder, type ReminderChannelKey } from "@/db/schema";
 import { ensureProject } from "@/lib/dashboard-data";
+import { MAX_PHOTOS_LIMIT, MAX_PHOTO_SIZE_LIMIT_KB } from "@/lib/photo-upload";
 import { parseAllowedDomains } from "@/lib/widget-domains";
 
 export const dynamic = "force-dynamic";
@@ -168,6 +169,7 @@ export async function PATCH(request: Request) {
     "invitePositiveToExternal",
     "allowAnonymousReviews",
     "reviewTextRequired",
+    "allowPhotos",
     "publicShowCity",
     "publicShowDate",
     "publicShowName",
@@ -282,6 +284,16 @@ export async function PATCH(request: Request) {
     const n = asInt(body.minReviewLength);
     if (!Number.isInteger(n) || n < 0 || n > 2000) return fail("Minimum review length must be between 0 and 2,000.");
     values.minReviewLength = n;
+  }
+  if (body.maxPhotos !== undefined) {
+    const n = asInt(body.maxPhotos);
+    if (!Number.isInteger(n) || n < 1 || n > MAX_PHOTOS_LIMIT) return fail(`Photos per review must be between 1 and ${MAX_PHOTOS_LIMIT}.`);
+    values.maxPhotos = n;
+  }
+  if (body.maxPhotoSizeKb !== undefined) {
+    const n = asInt(body.maxPhotoSizeKb);
+    if (!Number.isInteger(n) || n < 64 || n > MAX_PHOTO_SIZE_LIMIT_KB) return fail(`Photo size limit must be between 64 and ${MAX_PHOTO_SIZE_LIMIT_KB} KB.`);
+    values.maxPhotoSizeKb = n;
   }
   if (body.maxReviewsPerIp !== undefined) {
     const n = asInt(body.maxReviewsPerIp);
