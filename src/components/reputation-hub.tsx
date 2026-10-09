@@ -5,6 +5,8 @@ import type { ReactNode } from "react";
 import type { DashboardProject, NotifyChannelKey, NotifyChannels, Reminder, ReminderChannelKey } from "@/lib/dashboard-data";
 import GoogleG from "@/components/google-g";
 import SidePanel from "@/components/side-panel";
+import type { CustomFormField } from "@/db/schema";
+import { MAX_CUSTOM_FIELDS } from "@/db/schema";
 import { MAX_PHOTOS_LIMIT, MAX_PHOTO_SIZE_LIMIT_KB } from "@/lib/photo-upload";
 import { MAX_ALLOWED_DOMAINS } from "@/lib/widget-domains";
 
@@ -311,6 +313,51 @@ export default function ReputationHub({ project, onSaved, onToast, onPreview }: 
             </SettingRow>
           </>
           : <p className="rep-settings-note">Photo attachments are disabled: customers can submit a rating and a comment only.</p>}
+      </Section>
+      <Section title="Custom fields" description={`Add up to ${MAX_CUSTOM_FIELDS} extra questions to the review form. Answers are stored on each review.`}>
+        {(() => {
+          const fields = form.formFields ?? [];
+          const update = (id: string, patch: Partial<CustomFormField>) => set("formFields", fields.map(field => field.id === id ? { ...field, ...patch } : field));
+          const add = () => set("formFields", [...fields, { id: `cf-${Math.random().toString(36).slice(2, 8)}`, label: `Question ${fields.length + 1}`, type: "text", options: [], required: false, showPublic: false }]);
+          const remove = (id: string) => set("formFields", fields.filter(field => field.id !== id));
+          return <>
+            {fields.length === 0 && <p className="rep-settings-note">No custom fields yet. Add a question to collect extra details from customers.</p>}
+            <div className="space-y-3">
+              {fields.map((field, index) => (
+                <div key={field.id} className="rounded-lg border border-[#e4e7ec] p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-semibold text-slate-500">Field {index + 1}</span>
+                    <button type="button" className="rep-button small quiet" onClick={() => remove(field.id)}>Remove</button>
+                  </div>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    <SettingRow label="Label" htmlFor={`rep-ff-label-${field.id}`}>
+                      <input id={`rep-ff-label-${field.id}`} className="rep-input" maxLength={80} value={field.label} onChange={event => update(field.id, { label: event.target.value })} />
+                    </SettingRow>
+                    <SettingRow label="Type" htmlFor={`rep-ff-type-${field.id}`}>
+                      <select id={`rep-ff-type-${field.id}`} className="rep-select medium" value={field.type} onChange={event => update(field.id, { type: event.target.value as CustomFormField["type"], options: event.target.value === "select" && field.options.length < 2 ? ["Option 1", "Option 2"] : field.options })}>
+                        <option value="text">Text</option>
+                        <option value="select">Select</option>
+                      </select>
+                    </SettingRow>
+                  </div>
+                  {field.type === "select" && (
+                    <SettingRow label="Options" htmlFor={`rep-ff-options-${field.id}`} hint="Separate options with commas (2–20)." className="mt-1">
+                      <input id={`rep-ff-options-${field.id}`} className="rep-input" value={field.options.join(", ")} onChange={event => update(field.id, { options: event.target.value.split(",").map(option => option.trim()).filter(Boolean).slice(0, 20) })} />
+                    </SettingRow>
+                  )}
+                  <div className="mt-2 flex flex-wrap gap-4">
+                    <SwitchRow label="Required" checked={field.required} onChange={value => update(field.id, { required: value })} />
+                    <SwitchRow label="Show in the public feed" checked={field.showPublic} onChange={value => update(field.id, { showPublic: value })} />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button type="button" className="rep-button mt-3" disabled={fields.length >= MAX_CUSTOM_FIELDS} onClick={add}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true"><path d="M12 4v16M4 12h16" /></svg>Add field
+            </button>
+            {fields.length >= MAX_CUSTOM_FIELDS && <p className="rep-hint">You have reached the maximum of {MAX_CUSTOM_FIELDS} custom fields.</p>}
+          </>;
+        })()}
       </Section>
       <Section title="Form fields" description="Control what customers can submit through your widget.">
         <SwitchRow label="Allow anonymous reviews" checked={form.allowAnonymousReviews} onChange={value => set("allowAnonymousReviews", value)} help="The company keeps the submitted details in the admin panel, while the public review is shown as Anonymous." />

@@ -2,6 +2,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { projects, reviews, type ReviewSentiment, type ReviewStatus } from "@/db/schema";
 import { publishDueReviews } from "@/lib/dashboard-data";
+import { buildCustomAnswers } from "@/lib/custom-fields";
 import { sanitizePhotos } from "@/lib/photo-upload";
 import { encryptEmail } from "@/lib/pii";
 import { buildFollowUp } from "@/lib/follow-up";
@@ -69,6 +70,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
         id: reviews.id,
         authorName: reviews.authorName,
         authorCity: reviews.authorCity,
+        customFields: reviews.customFields,
         isAnonymous: reviews.isAnonymous,
         rating: reviews.rating,
         sentiment: reviews.sentiment,
@@ -95,7 +97,11 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
           allowPhotos: project.allowPhotos,
           maxPhotos: project.maxPhotos,
           maxPhotoSizeKb: project.maxPhotoSizeKb,
+          customFields: (project.formFields ?? []).map((field) => ({
+            id: field.id, label: field.label, type: field.type, options: field.options, required: field.required,
+          })),
         },
+        badge: { format: project.badgeFormat },
         display: {
           city: project.publicShowCity,
           date: project.publicShowDate,
@@ -119,6 +125,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
           hiddenText: review.hiddenText,
           companyReply: review.companyReply,
           photos: review.photos ?? [],
+          customFields: (review.customFields ?? []).filter((field) => field.showPublic).map((field) => ({ label: field.label, value: field.value })),
           publishedAt: project.publicShowDate ? review.publishedAt : null,
           showAvatar: project.publicShowAvatar,
         };
@@ -167,6 +174,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     maxPhotoSizeKb: project.maxPhotoSizeKb,
   });
   if (photoCheck.error) return jsonResponse({ error: photoCheck.error }, origin, 400);
+  const customCheck = buildCustomAnswers(body.customFields, project.formFields ?? []);
+  if (customCheck.error) return jsonResponse({ error: customCheck.error }, origin, 400);
 
   const sentiment: ReviewSentiment = rating >= project.positiveThreshold
     ? "positive"

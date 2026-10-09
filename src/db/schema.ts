@@ -19,6 +19,21 @@ export type ReviewAuthorKind = "customer" | "employee";
 export const DEFAULT_MAX_PHOTOS = 3;
 export const DEFAULT_MAX_PHOTO_SIZE_KB = 400;
 
+/** Custom form fields a project can add to the review form. */
+export type CustomFormField = {
+  id: string;
+  label: string;
+  type: "text" | "select";
+  options: string[];
+  required: boolean;
+  showPublic: boolean;
+};
+export type CustomFieldAnswer = { id: string; label: string; value: string; showPublic: boolean };
+export const MAX_CUSTOM_FIELDS = 6;
+
+export type BadgeFormat = "number" | "stars" | "full" | "stars-only" | "banner";
+export const BADGE_FORMATS: BadgeFormat[] = ["number", "stars", "full", "stars-only", "banner"];
+
 export type NotifyChannelKey = "email" | "whatsapp" | "sms";
 export type NotifyChannels = Record<NotifyChannelKey, { enabled: boolean; value: string }>;
 export const defaultNotifyChannels: NotifyChannels = {
@@ -98,6 +113,10 @@ export const projects = pgTable("projects", {
   allowPhotos: boolean("allow_photos").notNull().default(true),
   maxPhotos: integer("max_photos").notNull().default(DEFAULT_MAX_PHOTOS),
   maxPhotoSizeKb: integer("max_photo_size_kb").notNull().default(DEFAULT_MAX_PHOTO_SIZE_KB),
+  /** Extra fields the review form asks for, in the order they were created. */
+  formFields: jsonb("form_fields").$type<CustomFormField[]>().notNull().default([]),
+  /** Default rating-badge variant (see the Badge page). */
+  badgeFormat: varchar("badge_format", { length: 16 }).notNull().default("full"),
   publicShowCity: boolean("public_show_city").notNull().default(false),
   publicShowDate: boolean("public_show_date").notNull().default(true),
   publicShowName: boolean("public_show_name").notNull().default(true),
@@ -160,6 +179,8 @@ export const reviews = pgTable(
     pinned: boolean("pinned").notNull().default(false),
     /** Photo attachments as data URLs, in the order the author added them. */
     photos: jsonb("photos").$type<string[]>().notNull().default([]),
+    /** Snapshot of the custom form answers, with their labels and public flag. */
+    customFields: jsonb("custom_fields").$type<CustomFieldAnswer[]>().notNull().default([]),
     authorKind: varchar("author_kind", { length: 16 }).$type<ReviewAuthorKind>().notNull().default("customer"),
     /** Employee who entered this review manually in the admin panel. */
     addedBy: varchar("added_by", { length: 120 }),

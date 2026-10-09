@@ -64,6 +64,11 @@
     allowPhotos: true,
     maxPhotos: 3,
     maxPhotoSizeKb: 400,
+    formFields: [
+      { id: "cf-visit", label: "What did you order?", type: "select", options: ["Coffee", "Breakfast", "Dessert"], required: false, showPublic: true },
+      { id: "cf-table", label: "Table number", type: "text", options: [], required: false, showPublic: false }
+    ],
+    badgeFormat: "full",
     publicShowCity: false,
     publicShowDate: true,
     publicShowName: true,
@@ -118,12 +123,13 @@
       pinned: false,
       photos: [],
       authorKind: "customer",
-      addedBy: null
+      addedBy: null,
+      customFields: []
     }, extra || {});
   }
 
   var reviews = [
-    review("Valeria M.", "valeria@example.com", "New York", 5, "Such a cozy spot — the matcha and the pour-over are love. I will definitely come back!", "published", 0.6, { companyReply: "Valeria, thank you for the warm words! We look forward to seeing you again ☕", replyAt: hoursAgo(0.1), photos: [DEMO_PHOTOS[0], DEMO_PHOTOS[1]] }),
+    review("Valeria M.", "valeria@example.com", "New York", 5, "Such a cozy spot — the matcha and the pour-over are love. I will definitely come back!", "published", 0.6, { companyReply: "Valeria, thank you for the warm words! We look forward to seeing you again ☕", replyAt: hoursAgo(0.1), photos: [DEMO_PHOTOS[0], DEMO_PHOTOS[1]], customFields: [{ id: "cf-visit", label: "What did you order?", value: "Coffee", showPublic: true }] }),
     review("Artem S.", "artem@example.com", "Chicago", 5, "The best cappuccino in the city. The barista helped me pick a bean, and now I come here first.", "published", 4, { companyReply: "Artem, glad we helped you find your taste. See you soon!" }),
     review("Anna K.", "anna@example.com", "Boston", 4, "Delicious and atmospheric, but we waited a bit long for the order. Otherwise everything was great.", "published", 26, { companyReply: "Anna, thanks for the feedback — we have already discussed serving speed with the team." }),
     review("Maria R.", "maria@example.com", "Seattle", 5, "Zerna has become my new Sunday tradition. Thank you for the cozy atmosphere and great coffee!", "published", 50, { photos: [DEMO_PHOTOS[1]] }),
@@ -227,10 +233,19 @@
         var authorKind = body.authorKind === "employee" ? "employee" : "customer";
         var addedBy = typeof body.addedBy === "string" ? body.addedBy.trim().slice(0, 120) : "";
         var submitted = Array.isArray(body.photos) ? body.photos.filter(isPhotoValue) : [];
+        var customMissing = "";
+        var customSnapshot = [];
+        (project.formFields || []).forEach(function (field) {
+          var raw = body.customFields && typeof body.customFields === "object" ? body.customFields[field.id] : undefined;
+          var value = typeof raw === "string" ? raw.trim().slice(0, 500) : "";
+          if (field.required && !value) { customMissing = field.label; return; }
+          if (value) customSnapshot.push({ id: field.id, label: field.label, value: value, showPublic: !!field.showPublic });
+        });
+        if (customMissing) return json({ error: "Please fill in “" + customMissing + "”." }, 400);
         var created = review(
           String(body.authorName || "Guest"), body.authorEmail || "", body.authorCity || "",
           rating, String(body.content || ""), mode === "instant" ? "published" : mode === "delayed" ? "queued" : "pending", 0,
-          { photos: project.allowPhotos ? submitted.slice(0, project.maxPhotos) : [], authorKind: authorKind, addedBy: addedBy || null }
+          { photos: project.allowPhotos ? submitted.slice(0, project.maxPhotos) : [], authorKind: authorKind, addedBy: addedBy || null, customFields: customSnapshot }
         );
         created.id = "9a0c0000-0000-4000-8000-0000000001" + String(counter).padStart(2, "0");
         created.source = authorKind === "employee" || addedBy ? "Added manually" : "Review form";

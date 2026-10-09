@@ -2,7 +2,10 @@ import { and, asc, desc, eq, isNull, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { decryptEmail } from "@/lib/pii";
 import { releaseBoostedPositives } from "@/lib/publish-rules";
-import { DEFAULT_MAX_PHOTOS, DEFAULT_MAX_PHOTO_SIZE_KB, projects, reviews, type NotifyChannels, type Reminder, type ReviewAuthorKind, type ReviewSentiment, type ReviewStatus } from "@/db/schema";
+import { DEFAULT_MAX_PHOTOS, DEFAULT_MAX_PHOTO_SIZE_KB, projects, reviews, type CustomFieldAnswer, type CustomFormField, type NotifyChannels, type Reminder, type ReviewAuthorKind, type ReviewSentiment, type ReviewStatus } from "@/db/schema";
+
+export type { CustomFormField, CustomFieldAnswer } from "@/db/schema";
+export { MAX_CUSTOM_FIELDS } from "@/db/schema";
 
 export type { Reminder, ReminderChannelKey } from "@/db/schema";
 
@@ -34,6 +37,8 @@ export type DashboardReview = {
   authorKind: ReviewAuthorKind;
   /** Employee who entered the review manually in the admin panel. */
   addedBy: string | null;
+  /** Snapshot of the custom form answers. */
+  customFields: CustomFieldAnswer[];
 };
 
 export type DashboardProject = {
@@ -78,6 +83,8 @@ export type DashboardProject = {
   allowPhotos: boolean;
   maxPhotos: number;
   maxPhotoSizeKb: number;
+  formFields: CustomFormField[];
+  badgeFormat: string;
   publicShowCity: boolean;
   publicShowDate: boolean;
   publicShowName: boolean;
@@ -325,6 +332,9 @@ function ensureSchema(): Promise<void> {
       sql`alter table "reviews" add column if not exists "photos" jsonb not null default '[]'::jsonb`,
       sql`alter table "reviews" add column if not exists "author_kind" varchar(16) not null default 'customer'`,
       sql`alter table "reviews" add column if not exists "added_by" varchar(120)`,
+      sql`alter table "reviews" add column if not exists "custom_fields" jsonb not null default '[]'::jsonb`,
+      sql`alter table "projects" add column if not exists "form_fields" jsonb not null default '[]'::jsonb`,
+      sql`alter table "projects" add column if not exists "badge_format" varchar(16) not null default 'full'`,
     ];
     for (const statement of statements) {
       try {

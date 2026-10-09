@@ -107,6 +107,9 @@ export default function ReviewActionsDrawer({ review, project, busy, onClose, on
               <img src={photo} alt={`Customer photo ${index + 1}`} loading="lazy" className="h-20 w-20 object-cover" />
             </a>)}
           </div>}
+          {(review.customFields ?? []).length > 0 && <div className="mt-3 space-y-1 rounded-lg border border-[#e9edf2] bg-white p-3" data-review-custom>
+            {review.customFields.map((field) => <p key={field.id} className="text-xs text-[#475467]"><span className="font-semibold text-[#344054]">{field.label}:</span> {field.value}</p>)}
+          </div>}
           {review.hiddenText && <p className="mt-2 text-[11px] text-amber-700">The comment is hidden on your website. Moderators can still read it here.</p>}
           {review.companyReply && <div className="mt-3 border-l-2 border-[#a7c3e9] pl-3"><p className="text-[10px] font-semibold text-[#6d88aa]">Company reply</p><p className="review-details-text mt-1 text-xs leading-relaxed text-[#78879a]">{review.companyReply}</p></div>}
           <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-slate-400">

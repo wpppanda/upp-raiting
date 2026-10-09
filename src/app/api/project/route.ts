@@ -2,7 +2,9 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { projects, type NotifyChannelKey, type NotifyChannels, type Reminder, type ReminderChannelKey } from "@/db/schema";
 import { ensureProject } from "@/lib/dashboard-data";
+import { parseFormFields } from "@/lib/custom-fields";
 import { MAX_PHOTOS_LIMIT, MAX_PHOTO_SIZE_LIMIT_KB } from "@/lib/photo-upload";
+import { BADGE_FORMATS } from "@/db/schema";
 import { parseAllowedDomains } from "@/lib/widget-domains";
 
 export const dynamic = "force-dynamic";
@@ -289,6 +291,16 @@ export async function PATCH(request: Request) {
     const n = asInt(body.maxPhotos);
     if (!Number.isInteger(n) || n < 1 || n > MAX_PHOTOS_LIMIT) return fail(`Photos per review must be between 1 and ${MAX_PHOTOS_LIMIT}.`);
     values.maxPhotos = n;
+  }
+  if (body.badgeFormat !== undefined) {
+    const format = String(body.badgeFormat);
+    if (!BADGE_FORMATS.includes(format as (typeof BADGE_FORMATS)[number])) return fail("Unknown badge format.");
+    values.badgeFormat = format;
+  }
+  if (body.formFields !== undefined) {
+    const parsed = parseFormFields(body.formFields);
+    if (parsed.error) return fail(parsed.error);
+    values.formFields = parsed.formFields;
   }
   if (body.maxPhotoSizeKb !== undefined) {
     const n = asInt(body.maxPhotoSizeKb);

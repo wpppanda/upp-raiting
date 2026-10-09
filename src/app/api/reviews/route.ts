@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { reviews, type ReviewAuthorKind, type ReviewSentiment, type ReviewStatus } from "@/db/schema";
 import { ensureProject } from "@/lib/dashboard-data";
+import { buildCustomAnswers } from "@/lib/custom-fields";
 import { sanitizePhotos } from "@/lib/photo-upload";
 import { buildFollowUp } from "@/lib/follow-up";
 import { encryptEmail } from "@/lib/pii";
@@ -109,6 +110,9 @@ export async function POST(request: Request) {
     });
     if (photoCheck.error) return Response.json({ error: photoCheck.error }, { status: 400 });
 
+    const customCheck = buildCustomAnswers(body.customFields, project.formFields ?? []);
+    if (customCheck.error) return Response.json({ error: customCheck.error }, { status: 400 });
+
     const boost = sentiment === "positive" ? await shouldBoostPositive(project.id, project) : false;
     const { status, delay } = resolveStatus(sentiment, project, content, boost);
     const createdAt = new Date();
@@ -131,6 +135,7 @@ export async function POST(request: Request) {
         photos: photoCheck.photos,
         authorKind,
         addedBy: addedBy || null,
+        customFields: customCheck.customFields,
       })
       .returning();
 

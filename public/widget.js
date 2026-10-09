@@ -50,15 +50,22 @@
       ".otklik-widget .ow-badge{display:inline-flex;flex-wrap:wrap;align-items:center;gap:9px;padding:10px 14px;border:1px solid #dadce0;border-radius:10px;background:#fff}",
       ".otklik-widget .ow-badge-score{color:#202124;font-size:19px;font-weight:600}",
       ".otklik-widget .ow-badge-caption{color:#5f6368;font-size:11px}",
-      ".otklik-widget .ow-form{max-width:540px;padding:20px;border:1px solid #dadce0;border-radius:12px;background:#fff}",
+      ".otklik-widget .ow-stars-big{font-size:19px;letter-spacing:2px}",
+      ".otklik-widget .ow-badge-banner{display:flex;align-items:center;gap:12px;width:100%;max-width:420px}",
+      ".otklik-widget .ow-badge-banner-left{display:flex;align-items:center;gap:8px}",
+      ".otklik-widget .ow-badge-divider{width:1px;align-self:stretch;background:#dadce0}",
+      ".otklik-widget .ow-form{max-width:540px;padding:20px;border:1px solid #b6bcc4;border-radius:12px;background:#fff}",
       ".otklik-widget .ow-form-title{margin:0;color:#202124;font-size:19px;font-weight:650}",
       ".otklik-widget .ow-form-description{margin:5px 0 16px;color:#5f6368;font-size:12px}",
-      ".otklik-widget .ow-field{display:block;width:100%;padding:10px 11px;margin:9px 0;color:#202124;border:1px solid #dadce0;border-radius:7px;background:#fff;font:inherit;font-size:12px;outline:none}",
-      ".otklik-widget .ow-field:focus{border-color:var(--otklik-accent)}",
+      ".otklik-widget .ow-field{display:block;width:100%;padding:10px 11px;margin:9px 0;color:#202124;border:1px solid #8f959c;border-radius:7px;background:#fff;font:inherit;font-size:12px;outline:none}",
+      ".otklik-widget .ow-field:focus{border-color:var(--otklik-accent);box-shadow:0 0 0 2px color-mix(in srgb, var(--otklik-accent) 25%, transparent)}",
+      ".otklik-widget .ow-field::placeholder{color:#5f6368}",
+      ".otklik-widget select.ow-field{appearance:auto}",
+      ".otklik-widget .ow-field-label{display:block;margin:10px 0 0;color:#3c4043;font-size:11px;font-weight:600}",
       ".otklik-widget textarea.ow-field{min-height:94px;resize:vertical}",
       ".otklik-widget .ow-rate-label{display:block;margin:13px 0 7px;color:#5f6368;font-size:11px;font-weight:600}",
       ".otklik-widget .ow-rating-options{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px}",
-      ".otklik-widget .ow-rating-choice{min-width:36px;height:35px;padding:0 7px;color:#5f6368;border:1px solid #dadce0;border-radius:7px;background:#fff;font:inherit;font-size:12px;cursor:pointer}",
+      ".otklik-widget .ow-rating-choice{min-width:36px;height:35px;padding:0 7px;color:#3c4043;border:1px solid #8f959c;border-radius:7px;background:#fff;font:inherit;font-size:12px;cursor:pointer}",
       ".otklik-widget .ow-rating-choice:hover,.otklik-widget .ow-rating-choice.selected{color:#fff;border-color:var(--otklik-accent);background:var(--otklik-accent)}",
       ".otklik-widget .ow-submit{min-height:39px;padding:0 16px;color:#fff;border:0;border-radius:7px;background:var(--otklik-accent);font:inherit;font-size:12px;font-weight:650;cursor:pointer}",
       ".otklik-widget .ow-submit:hover{filter:brightness(.94)}",
@@ -204,6 +211,15 @@
         });
         if (photoRow.children.length) card.appendChild(photoRow);
       }
+      if (Array.isArray(review.customFields) && review.customFields.length) {
+        var customRow = element("div", "ow-meta");
+        customRow.style.marginTop = "7px";
+        review.customFields.forEach(function (field) {
+          var item = element("span", "", field.label + ": " + field.value);
+          customRow.appendChild(item);
+        });
+        card.appendChild(customRow);
+      }
       var showReply = container.getAttribute("data-show-response") !== "false";
       if (showReply && review.companyReply) {
         var reply = element("div", "ow-reply");
@@ -217,15 +233,33 @@
   }
 
   function renderBadge(container, payload) {
-    var format = container.getAttribute("data-format") || "full";
+    var format = container.getAttribute("data-format") || ((payload.badge && payload.badge.format) || "full");
     var scale = payload.project.ratingScale || "stars";
-    container.classList.add("ow-badge-wrap");
-    var badge = element("div", "ow-badge");
     var suffix = scale === "nps" ? "/10" : "";
-    badge.appendChild(element("strong", "ow-badge-score", payload.metrics.averageRating.toFixed(1) + suffix));
-    var symbol = scale === "stars" ? "★★★★★" : scale === "emoji" ? "😍" : scale === "binary" ? "👍" : "";
-    if (format !== "number" && symbol) badge.appendChild(element("span", "ow-stars", symbol));
-    if (format === "full") badge.appendChild(element("span", "ow-badge-caption", payload.metrics.total + " reviews"));
+    var score = payload.metrics.averageRating.toFixed(1);
+    var symbol = "★★★★★";
+    var count = payload.metrics.total;
+    container.classList.add("ow-badge-wrap");
+
+    if (format === "banner") {
+      var banner = element("div", "ow-badge ow-badge-banner");
+      var left = element("div", "ow-badge-banner-left");
+      left.appendChild(element("strong", "ow-badge-score", score + suffix));
+      left.appendChild(element("span", "ow-stars", symbol));
+      banner.appendChild(left);
+      banner.appendChild(element("span", "ow-badge-divider", ""));
+      banner.appendChild(element("span", "ow-badge-caption", count + " verified reviews"));
+      container.appendChild(banner);
+      return;
+    }
+
+    var badge = element("div", "ow-badge");
+    if (format !== "stars-only") badge.appendChild(element("strong", "ow-badge-score", score + suffix));
+    if (format !== "number") {
+      var stars = element("span", format === "stars-only" ? "ow-stars ow-stars-big" : "ow-stars", symbol);
+      badge.appendChild(stars);
+    }
+    if (format === "full") badge.appendChild(element("span", "ow-badge-caption", count + " reviews"));
     container.appendChild(badge);
   }
 
@@ -455,6 +489,44 @@
     var photoField = config.allowPhotos === true ? renderPhotoField(config) : null;
     if (photoField) form.appendChild(photoField.node);
 
+    // Custom fields configured in Business reputation → Review form
+    var customInputs = [];
+    (config.customFields || []).forEach(function (field) {
+      form.appendChild(element("label", "ow-field-label", field.label + (field.required ? " *" : "")));
+      if (field.type === "select") {
+        var select = element("select", "ow-field");
+        select.name = field.id;
+        select.required = field.required === true;
+        var placeholder = element("option", "", "Choose…");
+        placeholder.value = "";
+        select.appendChild(placeholder);
+        (field.options || []).forEach(function (option) {
+          var optionNode = element("option", "", option);
+          optionNode.value = option;
+          select.appendChild(optionNode);
+        });
+        form.appendChild(select);
+        customInputs.push({ field: field, read: function () { return select.value; } });
+      } else {
+        var input = element("input", "ow-field");
+        input.type = "text";
+        input.name = field.id;
+        input.maxLength = 500;
+        input.required = field.required === true;
+        input.placeholder = field.label;
+        form.appendChild(input);
+        customInputs.push({ field: field, read: function () { return input.value.trim(); } });
+      }
+    });
+    function collectCustom() {
+      var out = {};
+      customInputs.forEach(function (item) {
+        var value = item.read();
+        if (value) out[item.field.id] = value;
+      });
+      return out;
+    }
+
     var anonymousField = null;
     if (config.allowAnonymousReviews === true) {
       var anonymousLabel = element("label", "ow-anonymous");
@@ -500,7 +572,8 @@
           isAnonymous: anonymousField ? anonymousField.checked : false,
           rating: selectedRating,
           content: comment,
-          photos: photoField ? photoField.getPhotos() : []
+          photos: photoField ? photoField.getPhotos() : [],
+          customFields: collectCustom()
         })
       }).then(function (response) {
         return response.json().then(function (body) {

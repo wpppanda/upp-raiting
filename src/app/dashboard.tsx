@@ -15,10 +15,20 @@ import GoogleG from "@/components/google-g";
 export type { DashboardReview, DashboardProject, DashboardData };
 
 // --- Navigation Tabs & Subsections ---
+function BadgeSample({ format, score, count }: { format: string; score: string; count: number }) {
+  const stars = <span className="tracking-wider text-[#FBBC04]">★★★★★</span>;
+  if (format === "banner") return <div className="flex items-center gap-3 rounded-lg border border-slate-300 bg-white px-4 py-2.5"><span className="flex items-center gap-2"><strong className="text-lg text-slate-900">{score}</strong>{stars}</span><span className="h-6 w-px bg-slate-200" /><span className="text-xs text-slate-500">{count} verified reviews</span></div>;
+  if (format === "number") return <div className="inline-flex rounded-lg border border-slate-300 bg-white px-4 py-2"><strong className="text-lg text-slate-900">{score}</strong></div>;
+  if (format === "stars-only") return <div className="inline-flex rounded-lg border border-slate-300 bg-white px-4 py-2"><span className="text-[16px] tracking-[2px] text-[#FBBC04]">★★★★★</span></div>;
+  if (format === "stars") return <div className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2"><strong className="text-lg text-slate-900">{score}</strong>{stars}</div>;
+  return <div className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2"><strong className="text-lg text-slate-900">{score}</strong>{stars}<span className="text-xs text-slate-500">{count} reviews</span></div>;
+}
+
 export type MainView =
   | "reviews"
   | "queue"
   | "install"
+  | "badge"
   | "moderation"
   | "analytics"
   | "widgets"
@@ -144,6 +154,12 @@ function SidebarIcon({ name, active }: { name: string; active?: boolean }) {
           <circle cx="12" cy="12" r="3" />
         </svg>
       );
+    case "star":
+      return (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+        </svg>
+      );
     case "plug":
       return (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -265,6 +281,8 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
   const [newAddedBy, setNewAddedBy] = useState("Administrator");
   const [newPhotos, setNewPhotos] = useState<string[]>([]);
   const [newPhotoNote, setNewPhotoNote] = useState("");
+  const [newCustom, setNewCustom] = useState<Record<string, string>>({});
+  const [badgeSelection, setBadgeSelection] = useState<string>(initialData.project.badgeFormat || "full");
   const [photosBusy, setPhotosBusy] = useState(false);
 
   // Widget preview sandbox + right drawer
@@ -437,6 +455,65 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
     </div>
   );
 
+  const customFieldsUI = (compact: boolean) => {
+    const fields = data.project.formFields ?? [];
+    if (!fields.length) return null;
+    return (
+      <div className={compact ? "space-y-1.5" : "space-y-2"}>
+        {fields.map((field) => (
+          <div key={field.id}>
+            <label className={`block font-semibold text-slate-700 ${compact ? "mb-0.5 text-[11px]" : "mb-1 text-xs"}`}>
+              {field.label}
+              {field.required ? <span className="text-rose-500"> *</span> : <span className="font-normal text-slate-400"> (optional)</span>}
+            </label>
+            {field.type === "select" ? (
+              <select
+                value={newCustom[field.id] ?? ""}
+                onChange={(e) => setNewCustom((current) => ({ ...current, [field.id]: e.target.value }))}
+                required={field.required}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+              >
+                <option value="">Choose…</option>
+                {field.options.map((option) => <option key={option} value={option}>{option}</option>)}
+              </select>
+            ) : (
+              <input
+                type="text"
+                maxLength={500}
+                required={field.required}
+                placeholder={field.label}
+                value={newCustom[field.id] ?? ""}
+                onChange={(e) => setNewCustom((current) => ({ ...current, [field.id]: e.target.value }))}
+                className={`w-full rounded-lg border border-slate-300 text-slate-800 ${compact ? "p-2 text-xs" : "px-3 py-2 text-sm"}`}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const BADGE_META = [
+    { id: "number", name: "Number", description: "Just the score — the smallest footprint." },
+    { id: "stars", name: "Stars", description: "Score plus a star row." },
+    { id: "full", name: "Full", description: "Score, stars, and the review count." },
+    { id: "stars-only", name: "Stars only", description: "Only the star row, no numbers." },
+    { id: "banner", name: "Banner", description: "A wide strip for footers and hero sections." },
+  ];
+
+  const saveBadgeFormat = async (format: string) => {
+    setBadgeSelection(format);
+    try {
+      const res = await fetch("/api/project", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ badgeFormat: format }) });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Unable to save the badge format.");
+      setData((prev: DashboardData) => ({ ...prev, project: json.project }));
+      showToast("Badge format saved.");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Unable to save the badge format.");
+    }
+  };
+
   // Submit New Review — from the widget sandbox (a customer) or from Add review (an employee)
   const handleCreateReview = async (e: React.FormEvent, origin: "widget" | "admin" = "widget") => {
     e.preventDefault();
@@ -456,6 +533,7 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
           rating: newRating,
           content: newContent.trim(),
           photos: newPhotos,
+          customFields: newCustom,
           authorKind: origin === "admin" ? newAuthorKind : "customer",
           addedBy: origin === "admin" ? newAddedBy.trim() || undefined : undefined,
         }),
@@ -478,6 +556,7 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
         setNewRating(5);
         setNewPhotos([]);
         setNewPhotoNote("");
+        setNewCustom({});
       } else {
         showToast(String(result.error ?? "") || "Unable to create the review.");
       }
@@ -813,6 +892,16 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
             title="Widgets and embed code"
           >
             <SidebarIcon name="split" active={currentView === "widgets"} />
+          </button>
+
+          <button
+            onClick={() => setCurrentView("badge")}
+            className={`w-11 h-11 flex items-center justify-center rounded-xl transition-all ${
+              currentView === "badge" ? "bg-blue-50 text-blue-600 shadow-sm" : "text-slate-500 hover:bg-slate-100"
+            }`}
+            title="Rating badge"
+          >
+            <SidebarIcon name="star" active={currentView === "badge"} />
           </button>
 
           <button
@@ -2219,6 +2308,7 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
                         maxLength={2000}
                         className="w-full border border-slate-200 rounded-lg p-2 text-xs"
                       />
+                      {customFieldsUI(true)}
                       {photoRules.allowPhotos && photoField(true)}
                       <button
                         type="submit"
@@ -2502,6 +2592,49 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
             </div>
           )}
 
+          {currentView === "badge" && (
+            <div className="space-y-4">
+              <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <h1 className="text-lg font-bold text-slate-900">Rating badge</h1>
+                    <p className="mt-1 max-w-xl text-sm text-slate-500">Pick the badge that fits your site. The choice is saved and used wherever the widget renders a <code className="rounded bg-slate-100 px-1 py-0.5 text-[11px]">{'data-widget="badge"'}</code> block.</p>
+                  </div>
+                  <BadgeSample format={badgeSelection} score={data.metrics.averageRating.toFixed(1)} count={data.metrics.published} />
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {BADGE_META.map((variant) => (
+                  <button
+                    key={variant.id}
+                    type="button"
+                    onClick={() => void saveBadgeFormat(variant.id)}
+                    className={`rounded-xl border p-4 text-left transition-colors ${badgeSelection === variant.id ? "border-blue-600 bg-blue-50" : "border-slate-200 bg-white hover:bg-slate-50"}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-semibold text-slate-800">{variant.name}</span>
+                      {badgeSelection === variant.id && <span className="rounded bg-blue-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">Active</span>}
+                    </div>
+                    <p className="mt-1 text-[11px] text-slate-500">{variant.description}</p>
+                    <div className="mt-3"><BadgeSample format={variant.id} score={data.metrics.averageRating.toFixed(1)} count={data.metrics.published} /></div>
+                  </button>
+                ))}
+              </div>
+
+              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+                <h2 className="text-sm font-bold text-slate-800">Embed the badge</h2>
+                <pre className="mt-3 overflow-x-auto rounded-lg bg-slate-900 p-4 font-mono text-[12px] leading-relaxed text-slate-100"><code>{`<script src="${typeof window !== "undefined" ? window.location.origin : ""}/widget.js" data-project-id="${data.project.id}" defer></script>\n<div data-widget="badge" data-format="${badgeSelection}"></div>`}</code></pre>
+                <button
+                  type="button"
+                  className="mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors"
+                  onClick={() => { navigator.clipboard.writeText(`<script src="${window.location.origin}/widget.js" data-project-id="${data.project.id}" defer></script>\n<div data-widget="badge" data-format="${badgeSelection}"></div>`); showToast("Badge code copied."); }}
+                >Copy code</button>
+                <p className="mt-2 text-[11px] text-slate-400">The same badge appears in the widget preview and on the Widgets page. Control where it can load in Business reputation → Protection &amp; Settings.</p>
+              </div>
+            </div>
+          )}
+
           {currentView === "reputation" && (
             <ReputationHub
               project={data.project}
@@ -2607,6 +2740,7 @@ export default function Dashboard({ initialData }: { initialData: DashboardData 
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Review text <span className="font-normal text-slate-400">(optional)</span></label>
                 <textarea rows={4} maxLength={2000} placeholder="Describe the customer experience (optional)…" value={newContent} onChange={(e) => setNewContent(e.target.value)} className="w-full border border-slate-200 rounded-lg p-3 text-sm text-slate-800" />
               </div>
+              {customFieldsUI(false)}
               {photoRules.allowPhotos
                 ? photoField(false)
                 : <p className="text-[11px] text-slate-400">Photo attachments are turned off in Business reputation → Review form.</p>}

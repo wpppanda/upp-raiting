@@ -204,10 +204,15 @@ const bodyText = () => doc.body.textContent;
   const nameInput = modal.querySelector('input[type="text"][required]');
   Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set.call(nameInput, "Maria (manager)");
   nameInput.dispatchEvent(new window.Event("input", { bubbles: true }));
+  const customSelect = modal.querySelector("select");
+  check("the add-review modal renders the custom select field", !!customSelect);
+  customSelect.value = "Breakfast";
+  customSelect.dispatchEvent(new window.Event("change", { bubbles: true }));
   await flush();
   modal.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
   await flush();
   const added = window.__UPP_DEMO__.reviews[0];
+  check("the modal collects the custom field answer", (added.customFields ?? []).some((field) => field.value === "Breakfast"));
   check("the employee review is stored with its author kind", added.authorKind === "employee" && added.authorName === "Maria (manager)");
   check("the employee review records who added it", added.addedBy === "Administrator" && added.source === "Added manually");
 
@@ -226,6 +231,23 @@ const bodyText = () => doc.body.textContent;
   await click(allowPhotos);
   check("photos can be turned off", allowPhotos.getAttribute("aria-checked") === "false" && /Photo attachments are disabled/.test(bodyText()));
   await click(allowPhotos);
+
+  await click(Array.prototype.slice.call(doc.querySelectorAll(".rep-footer-actions button")).filter((button) => button.textContent.indexOf("Widget preview") !== -1)[0]);
+  await flush();
+  const previewDialog = doc.querySelector("dialog.side-panel[open]");
+  check("the widget preview no longer embeds a code box", !Array.prototype.slice.call(previewDialog.querySelectorAll("pre")).some((pre) => pre.textContent.indexOf("widget.js") !== -1));
+  check("the preview still lists the allowed domains", /Allowed domains:/.test(previewDialog.textContent) && /zerno\.coffee, shop\.zerno\.coffee, \*\.zerna\.app/.test(previewDialog.textContent));
+  await click(previewDialog.querySelector(".panel-close"));
+  await sleep(260);
+
+  // Badge page with five variants and its own settings.
+  await click(doc.querySelector('button[title="Rating badge"]'));
+  check("the badge page lists the five variants", /Number/.test(bodyText()) && /Stars only/.test(bodyText()) && /Banner/.test(bodyText()));
+  const bannerCard = Array.prototype.slice.call(doc.querySelectorAll("button")).filter((button) => /A wide strip for footers/.test(button.textContent))[0];
+  await click(bannerCard);
+  await flush();
+  check("choosing a variant saves it as the project default", window.__UPP_DEMO__.project.badgeFormat === "banner");
+  check("the badge embed snippet follows the selection", /data-widget="badge" data-format="banner"/.test(bodyText()));
 
   // Installation guide right after the publication queue.
   await click(doc.querySelector('button[title="Install the widget on your website"]'));
